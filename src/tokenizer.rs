@@ -12,6 +12,26 @@ fn is_identifier_char(c: char) -> bool {
     return false;
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct SrcLoc {
+    pos: usize,
+}
+
+impl SrcLoc {
+    pub fn new(pos: usize) -> Self {
+        return SrcLoc {
+            pos,
+        }
+    }
+}
+
+impl fmt::Display for SrcLoc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.pos)
+    }
+}
+
+
 impl Tokenizer<'_> {
     fn lex_char(&mut self) -> char {
         let result = self.data[self.offset] as char;
@@ -42,11 +62,20 @@ impl Tokenizer<'_> {
         return self.data[self.offset] as char;
     }
 
+    fn push_token(&mut self, loc: SrcLoc, tok: Token) {
+        self.tokens.push((loc, tok));
+    }
+
     fn new(data: &Vec<u8>) -> Tokenizer<'_> {
         return Tokenizer {
             data,
             offset: 0,
+            tokens: vec![],
         };
+    }
+
+    fn src_loc(&self) -> SrcLoc {
+        return SrcLoc::new(self.offset);
     }
 
     fn lex_number(&mut self) -> i32 {
@@ -92,31 +121,31 @@ impl Tokenizer<'_> {
         return bytes;
     }
 
-    fn run(&mut self) -> Vec<Token> {
-        let mut tokens = vec![];
-
+    fn run(&mut self) {
+        assert!(self.tokens.is_empty());
         while self.offset < self.data.len() {
             let c = self.peek();
+            let loc = self.src_loc();
             if c.is_whitespace() {
                 self.eat_next();
             } else if c.is_numeric() {
                 let num = self.lex_number();
-                tokens.push(Token::Number(num));
+                self.push_token(loc, Token::Number(num));
             } else if c == '-' {
                 self.eat_char('-');
                 let num = self.lex_number();
-                tokens.push(Token::Number(-1 * num));
+                self.push_token(loc, Token::Number(-1 * num));
             } else if c == '%' {
                 self.eat_char('%');
 
                 if self.peek() == '%' {
                     self.eat_char('%');
                     self.eat_keyword("EOF".to_string());
-                    tokens.push(Token::EOFKeyword);
+                    self.push_token(loc, Token::EOFKeyword);
                     continue;
                 }
 
-                tokens.push(Token::Percent);
+                self.push_token(loc, Token::Percent);
 
 
                 let mut chars = vec![];
@@ -125,40 +154,40 @@ impl Tokenizer<'_> {
                 }
                 self.eat_char('\n');
                 let str = chars.iter().collect();
-                tokens.push(Token::String(str));
+                self.push_token(loc, Token::String(str));
             } else if c == '<' {
                 self.eat_char('<');
                 self.eat_whitespace();
-                tokens.push(Token::AngleStart);
+                self.push_token(loc, Token::AngleStart);
                 if !self.peek_is('<') {
                     let id = self.lex_identifier();
-                    tokens.push(id);
+                    self.push_token(loc, id);
                 } else {
                     self.eat_char('<');
-                    tokens.push(Token::AngleStart);
+                    self.push_token(loc, Token::AngleStart);
                 }
             } else if c == '>' {
                 self.eat_char('>');
-                tokens.push(Token::AngleEnd);
+                self.push_token(loc, Token::AngleEnd);
             } else if c == '/' {
                 self.eat_char('/');
-                tokens.push(Token::ForwardSlash);
+                self.push_token(loc, Token::ForwardSlash);
                 let tok = self.lex_identifier();
-                tokens.push(tok);
+                self.push_token(loc, tok);
             } else if c == 'o' {
                 self.eat_keyword("obj".to_string());
-                tokens.push(Token::ObjKeyword);
+                self.push_token(loc, Token::ObjKeyword);
             } else if c == 'R' {
                 self.eat_keyword("R".to_string());
-                tokens.push(Token::RefKeyword);
+                self.push_token(loc, Token::RefKeyword);
             } else if c == 's' {
                 if self.peek_is_nth(2, 'a') {
                     self.eat_keyword("startxref".to_string());
-                    tokens.push(Token::StartXRefKeyword);
+                    self.push_token(loc, Token::StartXRefKeyword);
                     continue;
                 }
                 self.eat_keyword("stream".to_string());
-                tokens.push(Token::StreamKeyword);
+                self.push_token(loc, Token::StreamKeyword);
 
                 self.eat_whitespace();
 
@@ -166,66 +195,62 @@ impl Tokenizer<'_> {
                     let line_bytes = self.next_line_bytes();
                     match str::from_utf8(&line_bytes) {
                         Ok(v) => if v == "endstream".to_string() {
-                            tokens.push(Token::EndStreamKeyword);
+                            self.push_token(loc, Token::EndStreamKeyword);
                             break;
                         }
                         _ => {},
                     }
-                    tokens.push(Token::ByteStream(line_bytes))
+                    self.push_token(loc, Token::ByteStream(line_bytes))
                 }
             } else if c == 'e' {
                 self.eat_keyword("endobj".to_string());
-                tokens.push(Token::EndObjKeyword);
+                self.push_token(loc, Token::EndObjKeyword);
             } else if c == '[' {
                 self.eat_char('[');
-                tokens.push(Token::LeftBracket);
+                self.push_token(loc, Token::LeftBracket);
             } else if c == ']' {
                 self.eat_char(']');
-                tokens.push(Token::RightBracket);
+                self.push_token(loc, Token::RightBracket);
             } else if c == '(' {
                 self.eat_char('(');
-                tokens.push(Token::LeftParens);
+                self.push_token(loc, Token::LeftParens);
 
                 let mut chars = vec![];
                 while !self.peek_is(')') {
                     chars.push(self.lex_char());
                 }
                 let str = chars.iter().collect();
-                tokens.push(Token::String(str));
+                self.push_token(loc, Token::String(str));
                 self.eat_char(')');
-                tokens.push(Token::RightParens);
+                self.push_token(loc, Token::RightParens);
             } else if c == 'n' {
                 self.eat_keyword("n".to_string());
-                tokens.push(Token::NKeyword);
+                self.push_token(loc, Token::NKeyword);
             } else if c == 'f' {
                 self.eat_keyword("f".to_string());
-                tokens.push(Token::FKeyword);
+                self.push_token(loc, Token::FKeyword);
             } else if c == 't' {
                 self.eat_keyword("trailer".to_string());
-                tokens.push(Token::TrailerKeyword);
+                self.push_token(loc, Token::TrailerKeyword);
             } else if c == 'x' {
                 self.eat_keyword("xref".to_string());
-                tokens.push(Token::XRefKeyword);
+                self.push_token(loc, Token::XRefKeyword);
             } else {
-                println!("{:?}", tokens);
                 println!("FAILURE!!! {:?} @ loc{{{}}}/{}", c, self.offset, self.data.len());
                 assert!(false);
             }
         }
-
-        return tokens;
     }
 }
-
-
 
 #[derive(Debug)]
 struct Tokenizer<'a> {
     data: &'a Vec<u8>,
     offset: usize,
+    tokens: Vec<(SrcLoc, Token)>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Number(i32),
     Identifier(String),
@@ -289,7 +314,8 @@ impl fmt::Display for Token {
     }
 }
 
-pub fn tokenize_pdf(data: &Vec<u8>) -> Vec<Token> {
+pub fn tokenize_pdf(data: &Vec<u8>) -> Vec<(SrcLoc,Token)> {
     let mut tokenizer = Tokenizer::new(data);
-    return tokenizer.run();
+    tokenizer.run();
+    return tokenizer.tokens;
 }
