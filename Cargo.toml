@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 base64 = "0.22.1"
 flate2 = "1.1.9"
+iced = "0.14.0"

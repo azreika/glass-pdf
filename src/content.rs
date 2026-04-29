@@ -378,6 +378,18 @@ impl Parser {
         return self.text_state.matrix[7] as i32;
     }
 
+    fn pop_number(stack: &mut Vec<Value>) -> f64 {
+        return stack.pop().unwrap().value();
+    }
+
+    fn pop_string(stack: &mut Vec<Value>) -> String {
+        return stack.pop().unwrap().str();
+    }
+
+    fn pop_array(stack: &mut Vec<Value>) -> Vec<Box<Value>> {
+        return stack.pop().unwrap().arr();
+    }
+
     fn add_output(&mut self, str: &str) {
         *self.output.entry(self.y()).or_insert("".to_string()) += str;
     }
@@ -385,32 +397,31 @@ impl Parser {
     fn process_op(&mut self, stack: &mut Vec<Value>, tok: &ContentToken) {
         match tok {
             ContentToken::MinusOp => {
-                let arg2 = stack.pop().unwrap().value();
-                let arg1 = stack.pop().unwrap().value();
-                println!("{:?} - {:?}", arg1, arg2);
+                let arg2 = Self::pop_number(stack);
+                let arg1 = Self::pop_number(stack);
                 stack.push(Value::Number(arg1 - arg2));
             },
             ContentToken::TmKeyword => {
                 let mut mat = vec![];
                 for _ in 0..6 {
-                    mat.push(stack.pop().unwrap().value());
+                    mat.push(Self::pop_number(stack));
                 }
                 self.text_state.set_matrices(&mat);
             },
             ContentToken::TfKeyword => {
-                let size = stack.pop().unwrap().value();
-                let font = stack.pop().unwrap().str();
+                let size = Self::pop_number(stack);
+                let font = Self::pop_string(stack);
                 self.text_state.font = Some(font);
                 self.text_state.size = Some(size);
             },
             ContentToken::TjKeyword => {
                 // show one
-                let str = &stack.pop().unwrap().str();
-                self.add_output(str);
+                let str = Self::pop_string(stack);
+                self.add_output(&str);
             },
             ContentToken::TJKeyword => {
                 // show one or mroe
-                let arr = stack.pop().unwrap().arr();
+                let arr = Self::pop_array(stack);
                 for val in arr.iter() {
                     if matches!(**val, Value::Number(_)) {
                         // self.output += &format!("<space_{:?}>", val.value());
