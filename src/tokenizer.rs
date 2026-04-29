@@ -53,10 +53,6 @@ impl Tokenizer<'_> {
         return self.data[self.offset] as char == c;
     }
 
-    fn peek_is_nth(&self, n: usize, c: char) -> bool {
-        return self.data[self.offset + n] as char == c;
-    }
-
     fn peek(&self) -> char {
         return self.data[self.offset] as char;
     }
@@ -120,9 +116,14 @@ impl Tokenizer<'_> {
         return bytes;
     }
 
+    fn has_bytes(&self) -> bool {
+        return self.offset < self.data.len();
+    }
+
     fn run(&mut self) {
         assert!(self.tokens.is_empty());
-        while self.offset < self.data.len() {
+
+        while self.has_bytes() {
             let c = self.peek();
             let loc = self.src_loc();
             if c.is_whitespace() {
@@ -146,7 +147,6 @@ impl Tokenizer<'_> {
 
                 self.push_token(loc, Token::Percent);
 
-
                 let mut chars = vec![];
                 while !self.peek_is('\n') {
                     chars.push(self.lex_char());
@@ -165,51 +165,6 @@ impl Tokenizer<'_> {
                     self.eat_char('<');
                     self.push_token(loc, Token::AngleStart);
                 }
-            } else if c == '>' {
-                self.eat_char('>');
-                self.push_token(loc, Token::AngleEnd);
-            } else if c == '/' {
-                self.eat_char('/');
-                self.push_token(loc, Token::ForwardSlash);
-                let tok = self.lex_identifier();
-                self.push_token(loc, tok);
-            } else if c == 'o' {
-                self.eat_keyword("obj".to_string());
-                self.push_token(loc, Token::ObjKeyword);
-            } else if c == 'R' {
-                self.eat_keyword("R".to_string());
-                self.push_token(loc, Token::RefKeyword);
-            } else if c == 's' {
-                if self.peek_is_nth(2, 'a') {
-                    self.eat_keyword("startxref".to_string());
-                    self.push_token(loc, Token::StartXRefKeyword);
-                    continue;
-                }
-                self.eat_keyword("stream".to_string());
-                self.push_token(loc, Token::StreamKeyword);
-
-                self.eat_whitespace();
-
-                loop {
-                    let line_bytes = self.next_line_bytes();
-                    match str::from_utf8(&line_bytes) {
-                        Ok(v) => if v == "endstream".to_string() {
-                            self.push_token(loc, Token::EndStreamKeyword);
-                            break;
-                        }
-                        _ => {},
-                    }
-                    self.push_token(loc, Token::ByteStream(line_bytes))
-                }
-            } else if c == 'e' {
-                self.eat_keyword("endobj".to_string());
-                self.push_token(loc, Token::EndObjKeyword);
-            } else if c == '[' {
-                self.eat_char('[');
-                self.push_token(loc, Token::LeftBracket);
-            } else if c == ']' {
-                self.eat_char(']');
-                self.push_token(loc, Token::RightBracket);
             } else if c == '(' {
                 self.eat_char('(');
                 self.push_token(loc, Token::LeftParens);
@@ -222,22 +177,68 @@ impl Tokenizer<'_> {
                 self.push_token(loc, Token::String(str));
                 self.eat_char(')');
                 self.push_token(loc, Token::RightParens);
-            } else if c == 'n' {
-                self.eat_keyword("n".to_string());
-                self.push_token(loc, Token::NKeyword);
-            } else if c == 'f' {
-                self.eat_keyword("f".to_string());
-                self.push_token(loc, Token::FKeyword);
-            } else if c == 't' {
-                self.eat_keyword("trailer".to_string());
-                self.push_token(loc, Token::TrailerKeyword);
-            } else if c == 'x' {
-                self.eat_keyword("xref".to_string());
-                self.push_token(loc, Token::XRefKeyword);
             } else {
-                println!("FAILURE!!! {:?} @ loc{{{}}}/{}", c, self.offset, self.data.len());
-                assert!(false);
+                let word = self.lex_word();
+                let tok = self.token_from_word(&word);
+                self.push_token(loc, tok.clone());
+
+                if matches!(tok, Token::StreamKeyword) {
+                    self.lex_stream_body(loc);
+                } else if matches!(tok, Token::ForwardSlash) {
+                    let id_word = self.lex_word();
+                    self.push_token(loc, Token::Identifier(id_word));
+                }
             }
+        }
+    }
+
+    fn lex_word(&mut self) -> String {
+        if !is_identifier_char(self.peek()) {
+            return self.lex_char().to_string();
+        }
+
+        let mut chars = vec![];
+        while is_identifier_char(self.peek()) {
+            chars.push(self.lex_char());
+        }
+        let str = chars.iter().collect();
+        return str;
+    }
+
+    fn token_from_word(&self, word: &str) -> Token {
+        return match word {
+            "xref" => Token::XRefKeyword,
+            "trailer" => Token::TrailerKeyword,
+            "f" => Token::FKeyword,
+            "n" => Token::NKeyword,
+            "endobj" => Token::EndObjKeyword,
+            "R" => Token::RefKeyword,
+            "obj" => Token::ObjKeyword,
+            "startxref" => Token::StartXRefKeyword,
+            "stream" => Token::StreamKeyword,
+
+            "[" => Token::LeftBracket,
+            "]" => Token::RightBracket,
+            ">" => Token::AngleEnd,
+            _ => {
+                println!("FAILURE!!! {word} @ loc{{{}}}/{}", self.offset, self.data.len());
+                panic!();
+            }
+        }
+    }
+
+    fn lex_stream_body(&mut self, loc: SrcLoc) {
+        self.eat_whitespace();
+        loop {
+            let line_bytes = self.next_line_bytes();
+            match str::from_utf8(&line_bytes) {
+                Ok(v) => if v == "endstream".to_string() {
+                    self.push_token(loc, Token::EndStreamKeyword);
+                    break;
+                }
+                _ => {},
+            }
+            self.push_token(loc, Token::ByteStream(line_bytes))
         }
     }
 }
