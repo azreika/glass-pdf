@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 
+use iced::{Element, Font, Color, color};
+use iced;
+use iced::widget::{button, column, text, Column, Row, row, scrollable, container};
+
 #[derive(Clone, Debug)]
 enum ContentToken {
     SaveGraphicsState,
@@ -27,7 +31,6 @@ enum ContentToken {
     ETKeyword,
     LBracket,
     RBracket,
-    MinusOp,
     Null,
     Unknown(String),
 }
@@ -318,6 +321,33 @@ impl Value {
     }
 }
 
+struct Viewer {
+
+}
+
+struct Message {
+
+}
+
+impl Default for Viewer {
+    fn default() -> Self {
+        return Viewer {}
+    }
+}
+
+impl Viewer {
+    fn update(&mut self, message: Message) {
+
+    }
+
+    fn view(&self) -> Column<'_, Message> {
+        let result = column![
+            "10"
+        ];
+        return result;
+    }
+}
+
 impl Parser {
     fn reset_text_state(&mut self) {
         self.text_state = TextState::new();
@@ -342,6 +372,7 @@ impl Parser {
         for (_, txt) in text_vec.iter() {
             println!("{}", txt);
         }
+        iced::run(Viewer::update, Viewer::view).unwrap();
     }
 
     fn next_token(&mut self) -> ContentToken {
@@ -352,7 +383,6 @@ impl Parser {
 
     fn is_operator(&self, tok: &ContentToken) -> bool {
         return
-            matches!(tok, ContentToken::MinusOp) ||
             matches!(tok, ContentToken::TmKeyword) ||
             matches!(tok, ContentToken::TfKeyword) ||
             matches!(tok, ContentToken::TjKeyword) ||
@@ -381,11 +411,6 @@ impl Parser {
 
     fn process_op(&mut self, stack: &mut Vec<Value>, tok: &ContentToken) {
         match tok {
-            ContentToken::MinusOp => {
-                let arg2 = Self::pop_number(stack);
-                let arg1 = Self::pop_number(stack);
-                stack.push(Value::Number(arg1 - arg2));
-            },
             ContentToken::TmKeyword => {
                 let mut mat = vec![];
                 for _ in 0..6 {
