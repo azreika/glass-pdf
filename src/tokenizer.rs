@@ -1,15 +1,7 @@
 use std::fmt;
 
 fn is_identifier_char(c: char) -> bool {
-    if c.is_alphanumeric() {
-        return true;
-    }
-
-    if c == '.' || c == '-' || c == '+' {
-        return true;
-    }
-
-    return false;
+    return c.is_alphanumeric() || matches!(c, '.' | '-' | '+');
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -74,37 +66,23 @@ impl Tokenizer<'_> {
     }
 
     fn lex_number(&mut self) -> i32 {
+        let negative = self.peek_is('-');
+        if negative {
+            self.eat_char('-');
+        }
+
         let mut num = 0;
         while self.peek().is_numeric() {
-            let dd = (self.eat_next() as char).to_digit(10).unwrap() as i32;
             num *= 10;
-            num += dd;
+            num += (self.eat_next() as char).to_digit(10).unwrap() as i32;
         }
-        return num;
-    }
-
-    fn eat_keyword(&mut self, word: String) {
-        let mut idx = 0;
-        while idx < word.len() {
-            self.eat_char(word.chars().nth(idx).unwrap());
-            idx += 1;
-        }
-        assert!(self.peek().is_whitespace());
+        return if negative { -num } else { num };
     }
 
     fn eat_whitespace(&mut self) {
         while self.peek().is_whitespace() {
             self.eat_next();
         }
-    }
-
-    fn lex_identifier(&mut self) -> Token {
-        let mut chars = vec![];
-        while is_identifier_char(self.peek()) {
-            chars.push(self.lex_char());
-        }
-        let str = chars.iter().collect();
-        return Token::Identifier(str);
     }
 
     fn next_line_bytes(&mut self) -> Vec<u8> {
@@ -128,25 +106,19 @@ impl Tokenizer<'_> {
             let loc = self.src_loc();
             if c.is_whitespace() {
                 self.eat_next();
-            } else if c.is_numeric() {
+            } else if c.is_numeric() || c == '-' {
                 let num = self.lex_number();
                 self.push_token(loc, Token::Number(num));
-            } else if c == '-' {
-                self.eat_char('-');
-                let num = self.lex_number();
-                self.push_token(loc, Token::Number(-1 * num));
             } else if c == '%' {
                 self.eat_char('%');
-
                 if self.peek() == '%' {
                     self.eat_char('%');
-                    self.eat_keyword("EOF".to_string());
+                    let word = self.lex_word();
+                    assert_eq!(word, "EOF");
                     self.push_token(loc, Token::EOFKeyword);
                     continue;
                 }
-
                 self.push_token(loc, Token::Percent);
-
                 let mut chars = vec![];
                 while !self.peek_is('\n') {
                     chars.push(self.lex_char());
@@ -159,7 +131,8 @@ impl Tokenizer<'_> {
                 self.eat_whitespace();
                 self.push_token(loc, Token::AngleStart);
                 if !self.peek_is('<') {
-                    let id = self.lex_identifier();
+                    let id_word = self.lex_word();
+                    let id = Token::Identifier(id_word);
                     self.push_token(loc, id);
                 } else {
                     self.eat_char('<');
@@ -220,6 +193,7 @@ impl Tokenizer<'_> {
             "[" => Token::LeftBracket,
             "]" => Token::RightBracket,
             ">" => Token::AngleEnd,
+            "/" => Token::ForwardSlash,
             _ => {
                 println!("FAILURE!!! {word} @ loc{{{}}}/{}", self.offset, self.data.len());
                 panic!();
@@ -232,7 +206,7 @@ impl Tokenizer<'_> {
         loop {
             let line_bytes = self.next_line_bytes();
             match str::from_utf8(&line_bytes) {
-                Ok(v) => if v == "endstream".to_string() {
+                Ok(v) => if v == "endstream" {
                     self.push_token(loc, Token::EndStreamKeyword);
                     break;
                 }
