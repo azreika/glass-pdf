@@ -1,8 +1,13 @@
-
 #[derive(Debug)]
 pub struct ContentAst {
-    txt: String,
+    text_blocks: Vec<TextBlock>,
 }
+
+#[derive(Debug)]
+pub struct TextBlock {
+
+}
+
 
 #[derive(Clone, Debug)]
 enum ContentToken {
@@ -34,6 +39,22 @@ enum ContentToken {
     MinusOp,
     Null,
     Unknown(String),
+}
+
+impl ContentToken {
+    fn value(&self) -> f64 {
+        return match self {
+            ContentToken::Number(v) => *v,
+            _ => panic!(),
+        }
+    }
+
+    fn ident(&self) -> String {
+        return match self {
+            ContentToken::Identifier(v) => v.clone(),
+            _ => panic!(),
+        }
+    }
 }
 
 struct ContentTokenizer {
@@ -159,16 +180,13 @@ fn tokenize_stream(str: String) -> Vec<ContentToken> {
         } else if cc == '\0' {
             tokenizer.eat_next();
             vv.push(ContentToken::Null);
-        } else if cc == '-' {
-            tokenizer.eat_next();
-            vv.push(ContentToken::MinusOp);
         } else if cc == 'q' {
             tokenizer.eat_next();
             vv.push(ContentToken::SaveGraphicsState);
         } else if cc == 'Q' {
             tokenizer.eat_next();
             vv.push(ContentToken::RestoreGraphicsState);
-        } else if cc.is_numeric() || cc == '.' {
+        } else if cc.is_numeric() || cc == '.' || cc == '-' {
             let num = tokenizer.lex_number();
             vv.push(ContentToken::Number(num));
         } else if cc == 'W' {
@@ -225,24 +243,172 @@ fn tokenize_stream(str: String) -> Vec<ContentToken> {
 
 pub fn parse_stream(result: String) -> ContentAst {
     let tokens = tokenize_stream(result);
-    return parse_program(&tokens);
+    let mut parser = Parser { tokens: tokens, offset: 0, output: String::new() };
+    return parser.parse_program();
 }
 
-fn parse_program(tokens: &Vec<ContentToken>) -> ContentAst {
-    let mut txt = String::new();
-    let mut in_text_block = false;
-    let mut offset = 0;
+struct Parser {
+    tokens: Vec<ContentToken>,
+    offset: usize,
+    output: String,
+}
 
-    while offset < tokens.len() {
-        let tok = &tokens[offset];
-        if matches!(tok, ContentToken::BTKeyword) {
-            in_text_block = true;
-        } else if matches!(tok, ContentToken::ETKeyword) {
-            in_text_block = false;
-        } else if in_text_block {
-            println!("{:?}", tok);
+#[derive(Debug, Clone)]
+enum Value {
+    TextMatrix { nums: Vec<f64> },
+    Number(f64),
+    Identifier(String),
+    Array (Vec<Box<Value>>),
+}
+
+impl Value {
+    fn value(&self) -> f64 {
+        return match self {
+            Value::Number(v) => *v,
+            _ => panic!(),
         }
-        offset += 1;
     }
-    return ContentAst { txt: txt.to_string() };
+
+    fn str(&self) -> String {
+        return match self {
+            Value::Identifier(v) => v.clone(),
+            Value::Number(v) => v.to_string(),
+            _ => {
+                println!("expected tring, got {:?}", self);
+                panic!();
+            },
+        }
+    }
+}
+
+impl Parser {
+    fn parse_program(&mut self) -> ContentAst {
+        let text_blocks = vec![];
+
+        while self.offset < self.tokens.len() {
+            let tok = &self.tokens[self.offset];
+            if matches!(tok, ContentToken::BTKeyword) {
+                self.parse_text_block();
+            }
+            self.offset += 1;
+        }
+        println!("Text read: {:?}", self.output);
+        return ContentAst { text_blocks };
+    }
+
+    fn next_token(&mut self) -> ContentToken {
+        let tok = self.tokens[self.offset].clone();
+        self.offset += 1;
+        return tok;
+    }
+
+    fn is_operator(&self, tok: &ContentToken) -> bool {
+        return
+            matches!(tok, ContentToken::MinusOp) ||
+            matches!(tok, ContentToken::TmKeyword) ||
+            matches!(tok, ContentToken::TfKeyword) ||
+            matches!(tok, ContentToken::TjKeyword) ||
+            matches!(tok, ContentToken::TJKeyword)
+    }
+
+    fn process_op(&mut self, stack: &mut Vec<Value>, tok: &ContentToken) {
+        match tok {
+            ContentToken::MinusOp => {
+                let arg2 = stack.pop().unwrap().value();
+                let arg1 = stack.pop().unwrap().value();
+                println!("{:?} - {:?}", arg1, arg2);
+                stack.push(Value::Number(arg1 - arg2));
+            },
+            ContentToken::TmKeyword => {
+                let mut mat = vec![];
+                for _ in 0..6 {
+                    mat.push(stack.pop().unwrap().value());
+                }
+                stack.push(Value::TextMatrix { nums: mat });
+            },
+            ContentToken::TfKeyword => {
+
+            },
+            ContentToken::TjKeyword => {
+                // show one
+                self.output += &stack.pop().unwrap().str();
+            },
+            ContentToken::TJKeyword => {
+                // show one or mroe
+            }
+            _ => panic!(),
+        }
+    }
+
+    fn parse_parens(&mut self) -> Value {
+        let mut stack = vec![];
+
+        let mut tok = self.next_token();
+        while !matches!(tok, ContentToken::RParens) {
+            if matches!(tok, ContentToken::LParens) {
+                let expr = self.parse_parens();
+                stack.push(expr);
+            } else if matches!(tok, ContentToken::Identifier(_)) {
+                stack.push(Value::Identifier(tok.ident()));
+            } else {
+                println!("Unhandled op in parens parse: {:?}", tok);
+                println!("{:?}", stack);
+                panic!();
+            }
+            tok = self.next_token();
+        }
+
+        assert_eq!(stack.len(), 1);
+        return stack[0].clone();
+    }
+
+    fn parse_array(&mut self) -> Value {
+        let mut arr = vec![];
+
+        let mut tok = self.next_token();
+        while !matches!(tok, ContentToken::RBracket) {
+            assert!(!matches!(tok, ContentToken::LBracket));
+            if matches!(tok, ContentToken::Number(_)) {
+                let expr = tok.value();
+                arr.push(Box::new(Value::Number(expr)));
+            } else if matches!(tok, ContentToken::LParens) {
+                let expr = self.parse_parens();
+                arr.push(Box::new(expr));
+            } else {
+                println!("Unhandled op in bracket parse: {:?}", tok);
+                println!("{:?}", arr);
+                panic!()
+            }
+            tok = self.next_token();
+        }
+        return Value::Array(arr);
+    }
+
+    fn parse_text_block(&mut self) -> TextBlock {
+        assert!(matches!(self.next_token(), ContentToken::BTKeyword));
+        let mut stack = vec![];
+
+        let mut tok = self.next_token();
+        while !matches!(tok, ContentToken::ETKeyword) {
+            if self.is_operator(&tok) {
+                self.process_op(&mut stack, &tok);
+            } else if matches!(tok, ContentToken::Identifier(_)) {
+                stack.push(Value::Identifier(tok.ident()));
+            } else if matches!(tok, ContentToken::LParens)   {
+                stack.push(self.parse_parens());
+            } else if matches!(tok, ContentToken::LBracket) {
+                stack.push(self.parse_array());
+            } else {
+                if !(matches!(tok, ContentToken::Number(_))) {
+                    println!("Unhandled op in text block parse: {:?}", tok);
+                    println!("{:?}", stack);
+                    panic!();
+                }
+                stack.push(Value::Number(tok.value()));
+            }
+            tok = self.next_token();
+        }
+
+        return TextBlock {}
+    }
 }
