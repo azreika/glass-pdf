@@ -31,7 +31,6 @@ impl fmt::Display for SrcLoc {
     }
 }
 
-
 impl Tokenizer<'_> {
     fn lex_char(&mut self) -> char {
         let result = self.data[self.offset] as char;
