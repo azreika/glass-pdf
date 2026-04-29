@@ -31,11 +31,6 @@ fn main() {
     let page = ast.get_object(&vec[0]);
     println!("Page: {}", page);
     let contents = page.get("Contents").deref(&ast);
-    let bytes = contents.bytes();
     let result = contents.decode();
-
-    // println!("{}", result);
-
-    let graphics_ast = parse_stream(result);
-    println!("{:?}", graphics_ast);
+    parse_stream(result);
 }

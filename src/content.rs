@@ -1,16 +1,5 @@
 use std::collections::HashMap;
 
-#[derive(Debug)]
-pub struct ContentAst {
-    text_blocks: Vec<TextBlock>,
-}
-
-#[derive(Debug)]
-pub struct TextBlock {
-
-}
-
-
 #[derive(Clone, Debug)]
 enum ContentToken {
     SaveGraphicsState,
@@ -243,10 +232,10 @@ fn tokenize_stream(str: String) -> Vec<ContentToken> {
     return vv;
 }
 
-pub fn parse_stream(result: String) -> ContentAst {
+pub fn parse_stream(result: String) {
     let tokens = tokenize_stream(result);
     let mut parser = Parser { tokens: tokens, offset: 0, output: HashMap::new(), text_state: TextState::new() };
-    return parser.parse_program();
+    parser.parse_program();
 }
 
 struct TextState {
@@ -334,9 +323,7 @@ impl Parser {
         self.text_state = TextState::new();
     }
 
-    fn parse_program(&mut self) -> ContentAst {
-        let text_blocks = vec![];
-
+    fn parse_program(&mut self) {
         while self.offset < self.tokens.len() {
             let tok = &self.tokens[self.offset];
             if matches!(tok, ContentToken::BTKeyword) {
@@ -355,8 +342,6 @@ impl Parser {
         for (_, txt) in text_vec.iter() {
             println!("{}", txt);
         }
-
-        return ContentAst { text_blocks };
     }
 
     fn next_token(&mut self) -> ContentToken {
