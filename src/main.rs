@@ -10,7 +10,7 @@ use crate::parser::{parse_tokens};
 use crate::content::{parse_stream};
 
 fn main() {
-    let data: Vec<u8> = fs::read("samplepdf.pdf").expect("woops");
+    let data: Vec<u8> = fs::read("./src/samplepdf.pdf").expect("woops");
     let tokens = tokenize_pdf(&data);
     let ast = parse_tokens(&tokens);
     println!("{}", ast);

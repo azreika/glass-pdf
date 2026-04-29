@@ -243,19 +243,57 @@ fn tokenize_stream(str: String) -> Vec<ContentToken> {
 
 pub fn parse_stream(result: String) -> ContentAst {
     let tokens = tokenize_stream(result);
-    let mut parser = Parser { tokens: tokens, offset: 0, output: String::new() };
+    let mut parser = Parser { tokens: tokens, offset: 0, output: String::new(), text_state: TextState::new() };
     return parser.parse_program();
+}
+
+struct TextState {
+    matrix: Vec<f64>,
+    line_matrix: Vec<f64>,
+    font: Option<String>,
+    size: Option<f64>,
+}
+
+impl TextState {
+    fn init_matrix() -> Vec<f64> {
+        return vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    }
+
+    fn new() -> Self {
+        return TextState {
+            matrix: Self::init_matrix(),
+            line_matrix: Self::init_matrix(),
+            font: None,
+            size: None,
+        };
+    }
+
+    fn matrix_to_3d(v: &Vec<f64>) -> Vec<f64> {
+        assert_eq!(v.len(), 6);
+        let result = vec![
+            v[0], v[1], 0.0,
+            v[2], v[3], 0.0,
+            v[4], v[5], 1.0,
+        ];
+        return result;
+    }
+
+    fn set_matrices(&mut self, v: &Vec<f64>) {
+        let expected_matrix = Self::matrix_to_3d(v);
+        self.matrix = expected_matrix.clone();
+        self.line_matrix = expected_matrix.clone();
+    }
 }
 
 struct Parser {
     tokens: Vec<ContentToken>,
     offset: usize,
     output: String,
+    text_state: TextState,
 }
 
 #[derive(Debug, Clone)]
 enum Value {
-    TextMatrix { nums: Vec<f64> },
     Number(f64),
     Identifier(String),
     Array (Vec<Box<Value>>),
@@ -274,7 +312,15 @@ impl Value {
             Value::Identifier(v) => v.clone(),
             Value::Number(v) => v.to_string(),
             _ => {
-                println!("expected tring, got {:?}", self);
+                panic!();
+            },
+        }
+    }
+
+    fn arr(&self) -> Vec<Box<Value>> {
+        return match self {
+            Value::Array(arr) => arr.clone().to_vec(),
+            _ => {
                 panic!();
             },
         }
@@ -282,6 +328,10 @@ impl Value {
 }
 
 impl Parser {
+    fn reset_text_state(&mut self) {
+        self.text_state = TextState::new();
+    }
+
     fn parse_program(&mut self) -> ContentAst {
         let text_blocks = vec![];
 
@@ -324,10 +374,13 @@ impl Parser {
                 for _ in 0..6 {
                     mat.push(stack.pop().unwrap().value());
                 }
-                stack.push(Value::TextMatrix { nums: mat });
+                self.text_state.set_matrices(&mat);
             },
             ContentToken::TfKeyword => {
-
+                let size = stack.pop().unwrap().value();
+                let font = stack.pop().unwrap().str();
+                self.text_state.font = Some(font);
+                self.text_state.size = Some(size);
             },
             ContentToken::TjKeyword => {
                 // show one
@@ -335,6 +388,15 @@ impl Parser {
             },
             ContentToken::TJKeyword => {
                 // show one or mroe
+                let arr = stack.pop().unwrap().arr();
+                for val in arr.iter() {
+                    if matches!(**val, Value::Number(_)) {
+                        // self.output += &format!("<space_{:?}>", val.value());
+                    } else {
+                        assert!(matches!(**val, Value::Identifier(_)));
+                        self.output += &val.str();
+                    }
+                }
             }
             _ => panic!(),
         }
@@ -384,7 +446,7 @@ impl Parser {
         return Value::Array(arr);
     }
 
-    fn parse_text_block(&mut self) -> TextBlock {
+    fn parse_text_block(&mut self) {
         assert!(matches!(self.next_token(), ContentToken::BTKeyword));
         let mut stack = vec![];
 
@@ -409,6 +471,7 @@ impl Parser {
             tok = self.next_token();
         }
 
-        return TextBlock {}
+        assert!(stack.is_empty());
+        self.reset_text_state();
     }
 }
