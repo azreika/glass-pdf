@@ -37,5 +37,5 @@ fn main() {
     // println!("{}", result);
 
     let graphics_ast = parse_stream(result);
-    // println!("{:?}", graphics_ast);
+    println!("{:?}", graphics_ast);
 }

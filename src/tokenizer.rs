@@ -83,15 +83,6 @@ impl Tokenizer<'_> {
         }
     }
 
-    fn next_line_bytes(&mut self) -> Vec<u8> {
-        let mut bytes = vec![];
-        while !self.peek_is('\n') {
-            bytes.push(self.eat_next());
-        }
-        self.eat_whitespace();
-        return bytes;
-    }
-
     fn lex_until(&mut self, final_char: char) -> String {
         let mut chars = vec![];
         while !self.peek_is(final_char) {
@@ -207,17 +198,27 @@ impl Tokenizer<'_> {
     }
 
     fn lex_stream_body(&mut self, loc: SrcLoc) {
-        self.eat_whitespace();
-        loop {
-            let line_bytes = self.next_line_bytes();
-            match str::from_utf8(&line_bytes) {
-                Ok("endstream") => {
-                    self.push_token(loc, Token::EndStreamKeyword);
-                    break;
-                },
-                _ => self.push_token(loc, Token::ByteStream(line_bytes)),
+        self.eat_char('\n');
+        let start = self.offset;
+
+        // Scan for "endstream" marker
+        while self.offset < self.data.len() {
+            if self.data[self.offset..].starts_with(b"endstream") {
+                break;
             }
+            self.offset += 1;
         }
+
+        // Trim trailing \n or \r\n before endstream
+        let mut end = self.offset;
+        if end > start && self.data[end - 1] == b'\n' { end -= 1; }
+        if end > start && self.data[end - 1] == b'\r' { end -= 1; }
+
+        self.push_token(loc, Token::ByteStream(self.data[start..end].to_vec()));
+
+        // Consume "endstream"
+        self.offset += "endstream".len();
+        self.push_token(loc, Token::EndStreamKeyword);
     }
 }
 

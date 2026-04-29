@@ -4,7 +4,7 @@ pub struct ContentAst {
     txt: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ContentToken {
     SaveGraphicsState,
     RestoreGraphicsState,
@@ -228,6 +228,21 @@ pub fn parse_stream(result: String) -> ContentAst {
     return parse_program(&tokens);
 }
 
-fn parse_program(result: &Vec<ContentToken>) -> ContentAst {
-    return ContentAst { txt: "haha".to_string() };
+fn parse_program(tokens: &Vec<ContentToken>) -> ContentAst {
+    let mut txt = String::new();
+    let mut in_text_block = false;
+    let mut offset = 0;
+
+    while offset < tokens.len() {
+        let tok = &tokens[offset];
+        if matches!(tok, ContentToken::BTKeyword) {
+            in_text_block = true;
+        } else if matches!(tok, ContentToken::ETKeyword) {
+            in_text_block = false;
+        } else if in_text_block {
+            println!("{:?}", tok);
+        }
+        offset += 1;
+    }
+    return ContentAst { txt: txt.to_string() };
 }

@@ -106,11 +106,12 @@ impl Value {
 
     pub fn decode(&self) -> String {
         let bytes = self.bytes();
+
         let metadata = self.metadata();
         let filter = metadata.get("Filter").unwrap().get_string();
         assert!(filter == "FlateDecode");
 
-        let mut z = ZlibDecoder::new(&bytes[0..bytes.len()-1]);
+        let mut z = ZlibDecoder::new(&bytes[..]);
         let mut w = Vec::new();
         z.read_to_end(&mut w).unwrap();
 
