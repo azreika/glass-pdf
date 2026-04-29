@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Debug)]
 pub struct ContentAst {
     text_blocks: Vec<TextBlock>,
@@ -243,7 +245,7 @@ fn tokenize_stream(str: String) -> Vec<ContentToken> {
 
 pub fn parse_stream(result: String) -> ContentAst {
     let tokens = tokenize_stream(result);
-    let mut parser = Parser { tokens: tokens, offset: 0, output: String::new(), text_state: TextState::new() };
+    let mut parser = Parser { tokens: tokens, offset: 0, output: HashMap::new(), text_state: TextState::new() };
     return parser.parse_program();
 }
 
@@ -288,7 +290,7 @@ impl TextState {
 struct Parser {
     tokens: Vec<ContentToken>,
     offset: usize,
-    output: String,
+    output: HashMap<i32, String>,
     text_state: TextState,
 }
 
@@ -342,7 +344,18 @@ impl Parser {
             }
             self.offset += 1;
         }
-        println!("Text read: {:?}", self.output);
+
+        let mut text_vec: Vec<(&i32, &String)> = self.output.iter().collect();
+        text_vec.sort_by(|a,b| a.0.cmp(b.0));
+        text_vec.reverse();
+
+        println!("--- Text ---");
+        println!("--- --- ---");
+
+        for (_, txt) in text_vec.iter() {
+            println!("{}", txt);
+        }
+
         return ContentAst { text_blocks };
     }
 
@@ -359,6 +372,14 @@ impl Parser {
             matches!(tok, ContentToken::TfKeyword) ||
             matches!(tok, ContentToken::TjKeyword) ||
             matches!(tok, ContentToken::TJKeyword)
+    }
+
+    fn y(&self) -> i32 {
+        return self.text_state.matrix[7] as i32;
+    }
+
+    fn add_output(&mut self, str: &str) {
+        *self.output.entry(self.y()).or_insert("".to_string()) += str;
     }
 
     fn process_op(&mut self, stack: &mut Vec<Value>, tok: &ContentToken) {
@@ -384,7 +405,8 @@ impl Parser {
             },
             ContentToken::TjKeyword => {
                 // show one
-                self.output += &stack.pop().unwrap().str();
+                let str = &stack.pop().unwrap().str();
+                self.add_output(str);
             },
             ContentToken::TJKeyword => {
                 // show one or mroe
@@ -394,7 +416,7 @@ impl Parser {
                         // self.output += &format!("<space_{:?}>", val.value());
                     } else {
                         assert!(matches!(**val, Value::Identifier(_)));
-                        self.output += &val.str();
+                        self.add_output(&val.str());
                     }
                 }
             }
