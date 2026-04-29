@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use iced::{Element, Font, Color, color};
 use iced;
 use iced::widget::{button, column, text, Column, Row, row, scrollable, container};
+use iced::widget::canvas::{self, Canvas, Frame, Geometry};
+use iced::{Length, Point, Renderer, Theme};
 
 #[derive(Clone, Debug)]
 enum ContentToken {
@@ -48,6 +50,31 @@ impl ContentToken {
             ContentToken::Identifier(v) => v.clone(),
             _ => panic!(),
         }
+    }
+}
+
+struct Circle {
+    radius: f32,
+    center: Point,
+}
+
+impl<Message> canvas::Program<Message> for Circle {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: iced::Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = Frame::new(renderer, bounds.size());
+
+        let circle = canvas::Path::circle(self.center, self.radius);
+        frame.fill(&circle, Color::from_rgb(0.2, 0.5, 1.0));
+
+        vec![frame.into_geometry()]
     }
 }
 
@@ -340,11 +367,13 @@ impl Viewer {
 
     }
 
-    fn view(&self) -> Column<'_, Message> {
-        let result = column![
-            "10"
-        ];
-        return result;
+    fn view(&self) -> Element<'_, Message> {
+        return Canvas::new(Circle {
+            radius: 50.0,
+            center: Point::new(200.0, 200.0),
+        })
+        .width(Length::Fill)
+        .height(Length::Fill).into()
     }
 }
 
