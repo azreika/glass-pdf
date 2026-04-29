@@ -25,9 +25,7 @@ impl fmt::Display for SrcLoc {
 
 impl Tokenizer<'_> {
     fn lex_char(&mut self) -> char {
-        let result = self.data[self.offset] as char;
-        self.offset += 1;
-        return result;
+        return self.eat_next() as char;
     }
 
     fn eat_char(&mut self, c: char) {
@@ -42,7 +40,7 @@ impl Tokenizer<'_> {
     }
 
     fn peek_is(&self, c: char) -> bool {
-        return self.data[self.offset] as char == c;
+        return self.peek() == c;
     }
 
     fn peek(&self) -> char {
@@ -74,7 +72,7 @@ impl Tokenizer<'_> {
         let mut num = 0;
         while self.peek().is_numeric() {
             num *= 10;
-            num += (self.eat_next() as char).to_digit(10).unwrap() as i32;
+            num += self.lex_char().to_digit(10).unwrap() as i32;
         }
         return if negative { -num } else { num };
     }
@@ -92,6 +90,14 @@ impl Tokenizer<'_> {
         }
         self.eat_whitespace();
         return bytes;
+    }
+
+    fn lex_until(&mut self, final_char: char) -> String {
+        let mut chars = vec![];
+        while !self.peek_is(final_char) {
+            chars.push(self.lex_char());
+        }
+        return chars.iter().collect();
     }
 
     fn has_bytes(&self) -> bool {
@@ -119,12 +125,8 @@ impl Tokenizer<'_> {
                     continue;
                 }
                 self.push_token(loc, Token::Percent);
-                let mut chars = vec![];
-                while !self.peek_is('\n') {
-                    chars.push(self.lex_char());
-                }
+                let str = self.lex_until('\n');
                 self.eat_char('\n');
-                let str = chars.iter().collect();
                 self.push_token(loc, Token::String(str));
             } else if c == '<' {
                 self.eat_char('<');
@@ -143,6 +145,7 @@ impl Tokenizer<'_> {
                 self.push_token(loc, Token::LeftParens);
 
                 let mut chars = vec![];
+                // TODO: add depth params
                 while !self.peek_is(')') {
                     chars.push(self.lex_char());
                 }
@@ -165,6 +168,7 @@ impl Tokenizer<'_> {
         }
     }
 
+    // Lex the next word or delimiter in the byte sequence
     fn lex_word(&mut self) -> String {
         if !is_identifier_char(self.peek()) {
             return self.lex_char().to_string();
@@ -178,6 +182,7 @@ impl Tokenizer<'_> {
         return str;
     }
 
+    // Return the token matching the given word or delimiter
     fn token_from_word(&self, word: &str) -> Token {
         return match word {
             "xref" => Token::XRefKeyword,
@@ -206,13 +211,12 @@ impl Tokenizer<'_> {
         loop {
             let line_bytes = self.next_line_bytes();
             match str::from_utf8(&line_bytes) {
-                Ok(v) => if v == "endstream" {
+                Ok("endstream") => {
                     self.push_token(loc, Token::EndStreamKeyword);
                     break;
-                }
-                _ => {},
+                },
+                _ => self.push_token(loc, Token::ByteStream(line_bytes)),
             }
-            self.push_token(loc, Token::ByteStream(line_bytes))
         }
     }
 }
