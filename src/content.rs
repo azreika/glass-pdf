@@ -37,18 +37,18 @@ enum ContentToken {
 }
 
 struct ContentTokenizer {
-    data: String,
+    data: Vec<char>,
     offset: usize,
     missed_words: u32,
 }
 
 impl ContentTokenizer {
     fn peek(&self) -> char {
-        return self.data.chars().nth(self.offset).unwrap();
+        return self.data[self.offset];
     }
 
     fn eat_next(&mut self) -> char {
-        let result =self.data.chars().nth(self.offset).unwrap();
+        let result = self.data[self.offset];
         self.offset += 1;
         return result;
     }
@@ -149,8 +149,9 @@ impl ContentTokenizer {
 
 fn tokenize_stream(str: String) -> Vec<ContentToken> {
     let mut vv = vec![];
+    println!("{}", str);
 
-    let mut tokenizer = ContentTokenizer { data: str, offset: 0, missed_words: 0 };
+    let mut tokenizer = ContentTokenizer { data: str.chars().collect(), offset: 0, missed_words: 0 };
     while tokenizer.offset < tokenizer.data.len() {
         let cc = tokenizer.peek();
         if cc.is_whitespace() {
@@ -192,12 +193,26 @@ fn tokenize_stream(str: String) -> Vec<ContentToken> {
 
             if matches!(tok, ContentToken::LParens) {
                 let mut chars = vec![];
-                while tokenizer.peek() != ')' {
-                    chars.push(tokenizer.eat_next());
+                let mut depth = 1;
+                while depth > 0 && tokenizer.offset < tokenizer.data.len() {
+                    let mm = tokenizer.eat_next();
+                    match mm {
+                        '\\' => {
+                            chars.push(mm);
+                            if tokenizer.offset < tokenizer.data.len() {
+                                chars.push(tokenizer.eat_next()); // consume \(, \), \\, \n, etc.
+                            }
+                        },
+                        ')' => {
+                            depth -= 1;
+                            if depth > 0 { chars.push(mm); }
+                        },
+                        '(' => { depth += 1; chars.push(mm); },
+                        _   => chars.push(mm),
+                    }
                 }
                 let str = chars.iter().collect();
                 vv.push(ContentToken::Identifier(str));
-                tokenizer.eat_next();
                 vv.push(ContentToken::RParens);
             }
         }
