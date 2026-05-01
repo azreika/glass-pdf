@@ -51,15 +51,14 @@ impl ContentToken {
     }
 }
 
-struct Circle {
-    radius: f32,
-    center: Point,
+struct Glyph {
+    txt: String
 }
 
-impl<Message> canvas::Program<Message> for Circle {
+impl <Message> canvas::Program<Message> for Glyph {
     type State = ();
 
-    fn draw(
+     fn draw(
         &self,
         _state: &Self::State,
         renderer: &Renderer,
@@ -68,11 +67,9 @@ impl<Message> canvas::Program<Message> for Circle {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
-
-        let circle = canvas::Path::circle(self.center, self.radius);
-        frame.fill(&circle, Color::from_rgb(0.2, 0.5, 1.0));
-
-        vec![frame.into_geometry()]
+        let txt = canvas::Text::from(self.txt.clone());
+        frame.fill_text(txt);
+        return vec![frame.into_geometry()]
     }
 }
 
@@ -354,12 +351,9 @@ impl Viewer {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        return Canvas::new(Circle {
-            radius: 50.0,
-            center: Point::new(200.0, 200.0),
-        })
-        .width(Length::Fill)
-        .height(Length::Fill).into()
+        return Canvas::new(Glyph {
+            txt: "hello".to_string(),
+        }).into();
     }
 }
 
