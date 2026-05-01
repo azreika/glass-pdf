@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use iced::{Element, Color};
+use iced::{Element};
 use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
@@ -52,7 +52,13 @@ impl ContentToken {
 }
 
 struct TextBlock {
+    padding_x: f32,
+    padding_y: f32,
     output: HashMap<i32, String>
+}
+
+fn get_topmost(output: &HashMap<i32, String>) -> f32 {
+    return *output.keys().max().unwrap() as f32;
 }
 
 impl <Message> canvas::Program<Message> for TextBlock {
@@ -74,8 +80,8 @@ impl <Message> canvas::Program<Message> for TextBlock {
             let mut txt = canvas::Text::from(
                 str.clone()
             );
-            let bb = frame.height();
-            txt.position = Point::new(100.0, bb -*pos as f32);
+            let bb = get_topmost(&self.output);
+            txt.position = Point::new(self.padding_x, bb -*pos as f32 + self.padding_y);
             frame.fill_text(txt);
             geom.push(frame.into_geometry());
         }
@@ -362,7 +368,9 @@ impl Viewer {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        return Canvas::new(TextBlock{
+        return Canvas::new(TextBlock {
+            padding_x: 40.0,
+            padding_y: 20.0,
             output: self.output.clone()
         })
             .width(Length::Fill)
