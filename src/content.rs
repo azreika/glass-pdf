@@ -67,7 +67,11 @@ impl <Message> canvas::Program<Message> for Glyph {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
-        let txt = canvas::Text::from(self.txt.clone());
+        let mut txt =
+            canvas::Text::from(
+                self.txt.clone()
+            );
+        txt.position = Point::new(100.0, 100.0);
         frame.fill_text(txt);
         return vec![frame.into_geometry()]
     }
@@ -353,7 +357,10 @@ impl Viewer {
     fn view(&self) -> Element<'_, Message> {
         return Canvas::new(Glyph {
             txt: "hello".to_string(),
-        }).into();
+        })
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into();
     }
 }
 
