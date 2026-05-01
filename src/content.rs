@@ -55,6 +55,40 @@ struct Glyph {
     txt: String
 }
 
+struct TextBlock {
+    output: HashMap<i32, String>
+}
+
+impl <Message> canvas::Program<Message> for TextBlock {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: iced::Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Vec<Geometry> {
+
+        let mut geom: Vec<Geometry> = vec![];
+
+        for (pos, str) in self.output.iter() {
+            let mut frame = Frame::new(renderer, bounds.size());
+            let mut txt = canvas::Text::from(
+                str.clone()
+            );
+            let bb = frame.height();
+            txt.position = Point::new(100.0, bb -*pos as f32);
+            frame.fill_text(txt);
+            geom.push(frame.into_geometry());
+        }
+
+        return geom;
+    }
+}
+
+
 impl <Message> canvas::Program<Message> for Glyph {
     type State = ();
 
@@ -67,6 +101,7 @@ impl <Message> canvas::Program<Message> for Glyph {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
+
         let mut txt =
             canvas::Text::from(
                 self.txt.clone()
@@ -336,7 +371,7 @@ impl Value {
 }
 
 struct Viewer {
-
+    output: HashMap<i32, String>
 }
 
 struct Message {
@@ -345,7 +380,7 @@ struct Message {
 
 impl Default for Viewer {
     fn default() -> Self {
-        return Viewer {}
+        return Viewer { output: HashMap::new() }
     }
 }
 
@@ -355,8 +390,8 @@ impl Viewer {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        return Canvas::new(Glyph {
-            txt: "hello".to_string(),
+        return Canvas::new(TextBlock{
+            output: self.output.clone()
         })
             .width(Length::Fill)
             .height(Length::Fill)
@@ -388,7 +423,13 @@ impl Parser {
         for (_, txt) in text_vec.iter() {
             println!("{}", txt);
         }
-        iced::run(Viewer::update, Viewer::view).unwrap();
+
+        let output = self.output.clone();
+        iced::application(
+            move || (Viewer { output: output.clone() }, iced::Task::none()),
+            Viewer::update,
+            Viewer::view
+        ).run().unwrap();
     }
 
     fn next_token(&mut self) -> ContentToken {
