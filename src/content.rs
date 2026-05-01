@@ -51,10 +51,6 @@ impl ContentToken {
     }
 }
 
-struct Glyph {
-    txt: String
-}
-
 struct TextBlock {
     output: HashMap<i32, String>
 }
@@ -85,30 +81,6 @@ impl <Message> canvas::Program<Message> for TextBlock {
         }
 
         return geom;
-    }
-}
-
-
-impl <Message> canvas::Program<Message> for Glyph {
-    type State = ();
-
-     fn draw(
-        &self,
-        _state: &Self::State,
-        renderer: &Renderer,
-        _theme: &Theme,
-        bounds: iced::Rectangle,
-        _cursor: iced::mouse::Cursor,
-    ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-
-        let mut txt =
-            canvas::Text::from(
-                self.txt.clone()
-            );
-        txt.position = Point::new(100.0, 100.0);
-        frame.fill_text(txt);
-        return vec![frame.into_geometry()]
     }
 }
 
