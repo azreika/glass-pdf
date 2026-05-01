@@ -51,13 +51,19 @@ impl ContentToken {
     }
 }
 
+#[derive(Clone, Debug)]
+struct TextInfo {
+    txt: String,
+    size: f32,
+}
+
 struct TextBlock {
     padding_x: f32,
     padding_y: f32,
-    output: HashMap<i32, String>
+    output: HashMap<i32, TextInfo>
 }
 
-fn get_topmost(output: &HashMap<i32, String>) -> f32 {
+fn get_topmost(output: &HashMap<i32, TextInfo>) -> f32 {
     return *output.keys().max().unwrap() as f32;
 }
 
@@ -75,13 +81,13 @@ impl <Message> canvas::Program<Message> for TextBlock {
 
         let mut geom: Vec<Geometry> = vec![];
 
-        for (pos, str) in self.output.iter() {
+        for (pos, info) in self.output.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
             let mut txt = canvas::Text::from(
-                str.clone()
+                info.txt.clone()
             );
-            let bb = get_topmost(&self.output);
-            txt.position = Point::new(self.padding_x, bb -*pos as f32 + self.padding_y);
+            txt.position = Point::new(self.padding_x, *pos as f32 + self.padding_y);
+            txt.size = info.size.into();
             frame.fill_text(txt);
             geom.push(frame.into_geometry());
         }
@@ -309,7 +315,7 @@ impl TextState {
 struct Parser {
     tokens: Vec<ContentToken>,
     offset: usize,
-    output: HashMap<i32, String>,
+    output: HashMap<i32, TextInfo>,
     text_state: TextState,
 }
 
@@ -349,7 +355,7 @@ impl Value {
 }
 
 struct Viewer {
-    output: HashMap<i32, String>
+    output: HashMap<i32, TextInfo>
 }
 
 struct Message {
@@ -393,15 +399,15 @@ impl Parser {
             self.offset += 1;
         }
 
-        let mut text_vec: Vec<(&i32, &String)> = self.output.iter().collect();
+        let mut text_vec: Vec<(&i32, &TextInfo)> = self.output.iter().collect();
         text_vec.sort_by(|a,b| a.0.cmp(b.0));
         text_vec.reverse();
 
         println!("--- Text ---");
         println!("--- --- ---");
 
-        for (_, txt) in text_vec.iter() {
-            println!("{}", txt);
+        for (_, info) in text_vec.iter() {
+            println!("{}", info.txt);
         }
 
         let output = self.output.clone();
@@ -442,8 +448,24 @@ impl Parser {
         return stack.pop().unwrap().arr();
     }
 
+    fn curr_size(&self) -> f32 {
+        let mm = self.text_state.size;
+        return match mm {
+            Some(vv) => vv as f32,
+            _ => 16.0,
+        };
+    }
+
     fn add_output(&mut self, str: &str) {
-        *self.output.entry(self.y()).or_insert("".to_string()) += str;
+        let x_scale = self.text_state.matrix[0] as f32;
+        let init_size = self.curr_size();
+        let size = init_size * x_scale;
+        println!("{:?}", self.text_state.matrix);
+        let entry = self.output.entry(self.y()).or_insert(TextInfo {
+            txt: String::new(),
+            size: size,
+        });
+        entry.txt += str;
     }
 
     fn process_op(&mut self, stack: &mut Vec<Value>, tok: &ContentToken) {
@@ -453,6 +475,7 @@ impl Parser {
                 for _ in 0..6 {
                     mat.push(Self::pop_number(stack));
                 }
+                mat.reverse();
                 self.text_state.set_matrices(&mat);
             },
             ContentToken::TfKeyword => {
