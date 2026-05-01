@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use iced::{Element, Font, Color, color};
+use iced::{Element, Color};
 use iced;
-use iced::widget::{button, column, text, Column, Row, row, scrollable, container};
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
 
@@ -34,7 +33,6 @@ enum ContentToken {
     LBracket,
     RBracket,
     Null,
-    Unknown(String),
 }
 
 impl ContentToken {
@@ -165,29 +163,17 @@ impl ContentTokenizer {
             "TJ" => ContentToken::TJKeyword,
             "re" => ContentToken::RectKeyword,
             _ => {
-                if word != "" {
-                    println!("missed word: `{}`", word);
-                    self.missed_words += 1;
-                    return ContentToken::Unknown(word.to_string());
-                }
-                // println!("Got to {} out of {} ({}%)", self.offset, self.data.len(), (self.offset as f64 * 100.0 / self.data.len() as f64) );
+                println!("missed word: `{}`", word);
                 panic!();
+                // println!("Got to {} out of {} ({}%)", self.offset, self.data.len(), (self.offset as f64 * 100.0 / self.data.len() as f64) );
             }
         }
     }
 }
 
-  fn is_identifier_char(c: char) -> bool {
-    if c.is_alphanumeric() {
-            return true;
-        }
-
-        if c == '.' || c == '-' || c == '+' {
-            return true;
-        }
-
-        return false;
-    }
+fn is_identifier_char(c: char) -> bool {
+    return c.is_alphanumeric() || matches!(c, '.' | '-' | '+');
+}
 
 fn tokenize_stream(str: String) -> Vec<ContentToken> {
     let mut vv = vec![];
@@ -363,7 +349,7 @@ impl Default for Viewer {
 }
 
 impl Viewer {
-    fn update(&mut self, message: Message) {
+    fn update(&mut self, _: Message) {
 
     }
 
