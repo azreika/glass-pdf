@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use iced::{Element};
+use iced::{Color, Element};
 use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
@@ -76,6 +76,12 @@ impl <Message> canvas::Program<Message> for TextBlock {
     ) -> Vec<Geometry> {
 
         let mut geom: Vec<Geometry> = vec![];
+
+        // outer rectangle
+        let mut f1 = Frame::new(renderer, bounds.size());
+        let outer_rect = canvas::Path::rectangle(Point { x: 0.0, y: 0.0 }, bounds.size());
+        f1.fill(&outer_rect, Color::from_rgb(0.2, 0.5, 1.0));
+        geom.push(f1.into_geometry());
 
         for (pos, info) in self.output.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
