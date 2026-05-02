@@ -25,6 +25,10 @@ impl Tokenizer<Token> for PdfTokenizer {
             }
         }
     }
+
+    fn peek_u8(&self) -> u8 {
+        return self.data[self.offset];
+    }
 }
 
 impl PdfTokenizer {
@@ -41,14 +45,6 @@ impl PdfTokenizer {
         let result = self.data[self.offset];
         self.offset += 1;
         return result;
-    }
-
-    fn peek_is(&self, c: char) -> bool {
-        return self.peek() == c;
-    }
-
-    fn peek(&self) -> char {
-        return self.data[self.offset] as char;
     }
 
     fn push_token(&mut self, loc: SrcLoc, tok: Token) {

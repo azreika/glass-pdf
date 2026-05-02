@@ -53,10 +53,6 @@ struct ContentTokenizer {
 }
 
 impl ContentTokenizer {
-    fn peek(&self) -> char {
-        return self.data[self.offset] as char;
-    }
-
     fn eat_next(&mut self) -> char {
         let result = self.data[self.offset] as char;
         self.offset += 1;
@@ -75,10 +71,6 @@ impl ContentTokenizer {
         }
         let str: String = chars.iter().collect();
         return str.parse().unwrap();
-    }
-
-    fn peek_is(&self, c: char) -> bool {
-        return self.peek() == c;
     }
 
     fn eat_char(&mut self, c: char) {
@@ -139,6 +131,10 @@ impl Tokenizer<ContentToken> for ContentTokenizer {
                 panic!();
             }
         }
+    }
+
+    fn peek_u8(&self) -> u8 {
+        return self.data[self.offset];
     }
 }
 
