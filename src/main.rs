@@ -14,7 +14,7 @@ use crate::content_tokenizer::{tokenize_stream};
 use crate::viewer::{view_contents};
 
 fn main() {
-    let data: Vec<u8> = fs::read("./examples/NDIS_pricing.pdf").expect("woops");
+    let data: Vec<u8> = fs::read("./examples/samplepdf.pdf").expect("woops");
     let tokens = tokenize_pdf(&data);
     let ast = parse_tokens(&tokens);
     println!("{}", ast);
@@ -35,9 +35,15 @@ fn main() {
     let page = ast.get_object(&vec[0]);
     println!("Page: {}", page);
     let contents = page.get("Contents").deref(&ast);
+
+    let resources = page.get("Resources").deref(&ast);
+    println!("Resources:\n{}", resources);
+    let fonts = resources.get("Font");
+    let font_lib = ast.process_fonts(fonts);
+
     let decoded_contents = contents.decode();
 
     println!("Content:\n{}", decoded_contents);
     let tokenized_contents = tokenize_stream(decoded_contents);
-    view_contents(&tokenized_contents);
+    view_contents(&font_lib, &tokenized_contents);
 }

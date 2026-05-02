@@ -56,7 +56,7 @@ impl Value {
             Value::Dict(map) => {
                 return map.get(key).unwrap();
             }
-            _ => panic!(),
+            _ => panic!("expected dict, got {}", key),
         }
     }
 
@@ -121,11 +121,26 @@ impl Value {
         }
         return str;
     }
+
+    fn to_vec_u32(&self) -> Vec<u32> {
+        let arr = match self {
+            Value::Vector(arr) => {
+                arr.iter().map(|c| return c.to_num() as u32).collect()
+            }
+            _ => panic!(),
+        };
+        return arr;
+    }
 }
 
 #[derive(Debug)]
 pub struct Pdf {
     pub blocks: Vec<Block>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FontLib {
+    id_to_font: HashMap<String, Font>,
 }
 
 impl Pdf {
@@ -152,6 +167,44 @@ impl Pdf {
             }
         }
         panic!();
+    }
+
+    pub fn process_fonts(&self, fonts: &Value) -> FontLib {
+        let mut id_to_font = HashMap::new();
+        for (id, obj) in fonts.get_dict() {
+            let obj_info = obj.deref(&self);
+            assert_eq!(obj_info.get("Type").get_string(), "Font");
+            let descriptor = obj_info.get("FontDescriptor").deref(&self);
+            let widths = obj_info.get("Widths").deref(&self);
+
+            let font = Font {
+                id: id.to_string(),
+                name: descriptor.get("FontName").to_string(),
+                widths: widths.to_vec_u32(),
+                first_char: obj_info.get("FirstChar").to_num() as u32,
+            };
+            id_to_font.insert(id.to_string(), font);
+        }
+        return FontLib {
+            id_to_font,
+        };
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Font {
+    id: String,
+    name: String,
+    widths: Vec<u32>,
+    first_char: u32,
+}
+
+impl Value {
+    fn to_num(&self) -> f32 {
+        return match self {
+            Value::Number(x) => *x,
+            _ => panic!(),
+        }
     }
 }
 

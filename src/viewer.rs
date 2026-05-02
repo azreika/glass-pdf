@@ -7,8 +7,10 @@ use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
 
-pub fn view_contents(tokens: &Vec<ContentToken>) {
-    let mut parser = Parser { tokens: tokens.clone(), offset: 0, output: HashMap::new(), text_state: TextState::new() };
+use crate::ast::FontLib;
+
+pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
+    let mut parser = Parser { tokens: tokens.clone(), offset: 0, output: HashMap::new(), text_state: TextState::new(), font_lib: font_lib.clone() };
     parser.parse_program();
 }
 
@@ -17,6 +19,7 @@ struct Parser {
     offset: usize,
     output: HashMap<i32, TextInfo>,
     text_state: TextState,
+    font_lib: FontLib,
 }
 
 #[derive(Debug, Clone)]
@@ -160,7 +163,6 @@ impl Parser {
             ContentToken::TfKeyword => {
                 let size = Self::pop_number(stack);
                 let font = Self::pop_string(stack);
-                println!("Font to use: {:?}", font);
                 self.text_state.font = Some(font);
                 self.text_state.size = Some(size);
             },
