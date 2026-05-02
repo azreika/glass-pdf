@@ -1,4 +1,4 @@
-use crate::tokenizer::is_identifier_char;
+use crate::tokenizer::{Tokenizer, is_identifier_char};
 
 #[derive(Clone, Debug)]
 pub enum ContentToken {
@@ -47,18 +47,18 @@ impl ContentToken {
 }
 
 struct ContentTokenizer {
-    data: Vec<char>,
+    data: Vec<u8>,
     offset: usize,
     missed_words: u32,
 }
 
 impl ContentTokenizer {
     fn peek(&self) -> char {
-        return self.data[self.offset];
+        return self.data[self.offset] as char;
     }
 
     fn eat_next(&mut self) -> char {
-        let result = self.data[self.offset];
+        let result = self.data[self.offset] as char;
         self.offset += 1;
         return result;
     }
@@ -112,8 +112,10 @@ impl ContentTokenizer {
         let str = chars.iter().collect();
         return str;
     }
+}
 
-    fn token_from_word(&mut self, word: &str) -> ContentToken {
+impl Tokenizer<ContentToken> for ContentTokenizer {
+    fn token_from_word(&self, word: &str) -> ContentToken {
         return match word {
             "SC" => ContentToken::EndCsNoStroke,
             "sc" => ContentToken::EndCsStroke,
@@ -143,7 +145,8 @@ impl ContentTokenizer {
 pub fn tokenize_stream(str: String) -> Vec<ContentToken> {
     let mut vv = vec![];
 
-    let mut tokenizer = ContentTokenizer { data: str.chars().collect(), offset: 0, missed_words: 0 };
+    let bytes_arr = str.as_bytes().into_iter().copied().collect();
+    let mut tokenizer = ContentTokenizer { data: bytes_arr, offset: 0, missed_words: 0 };
     while tokenizer.offset < tokenizer.data.len() {
         let cc = tokenizer.peek();
         if cc.is_whitespace() {
