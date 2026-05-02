@@ -1,4 +1,4 @@
-use crate::content::ContentToken;
+use crate::content_tokenizer::ContentToken;
 
 use std::collections::HashMap;
 

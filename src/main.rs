@@ -3,14 +3,14 @@ use std::fs;
 mod tokenizer;
 mod parser;
 mod ast;
-mod content;
 mod viewer;
 mod pdf_tokenizer;
+mod content_tokenizer;
 mod src_loc;
 
 use crate::pdf_tokenizer::{tokenize_pdf};
 use crate::parser::{parse_tokens};
-use crate::content::{tokenize_stream};
+use crate::content_tokenizer::{tokenize_stream};
 use crate::viewer::{view_contents};
 
 fn main() {
