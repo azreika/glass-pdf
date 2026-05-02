@@ -4,10 +4,12 @@ mod tokenizer;
 mod parser;
 mod ast;
 mod content;
+mod viewer;
 
 use crate::tokenizer::{tokenize_pdf};
 use crate::parser::{parse_tokens};
-use crate::content::{parse_stream};
+use crate::content::{tokenize_stream};
+use crate::viewer::{view_contents};
 
 fn main() {
     let data: Vec<u8> = fs::read("./src/samplepdf.pdf").expect("woops");
@@ -31,6 +33,7 @@ fn main() {
     let page = ast.get_object(&vec[0]);
     println!("Page: {}", page);
     let contents = page.get("Contents").deref(&ast);
-    let result = contents.decode();
-    parse_stream(result);
+    let decoded_contents = contents.decode();
+    let tokenized_contents = tokenize_stream(decoded_contents);
+    view_contents(&tokenized_contents);
 }
