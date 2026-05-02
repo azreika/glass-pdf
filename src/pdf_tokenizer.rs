@@ -29,22 +29,16 @@ impl Tokenizer<Token> for PdfTokenizer {
     fn peek_u8(&self) -> u8 {
         return self.data[self.offset];
     }
+
+    fn step_ahead(&mut self) {
+        self.offset += 1;
+    }
 }
 
 impl PdfTokenizer {
-    fn lex_char(&mut self) -> char {
-        return self.eat_next() as char;
-    }
-
     fn eat_char(&mut self, c: char) {
         assert!(self.peek_is(c));
         self.offset += 1;
-    }
-
-    fn eat_next(&mut self) -> u8 {
-        let result = self.data[self.offset];
-        self.offset += 1;
-        return result;
     }
 
     fn push_token(&mut self, loc: SrcLoc, tok: Token) {
@@ -79,7 +73,7 @@ impl PdfTokenizer {
 
     fn eat_whitespace(&mut self) {
         while self.peek().is_whitespace() {
-            self.eat_next();
+            self.lex_char();
         }
     }
 
@@ -102,7 +96,7 @@ impl PdfTokenizer {
             let c = self.peek();
             let loc = self.src_loc();
             if c.is_whitespace() {
-                self.eat_next();
+                self.lex_char();
             } else if c.is_numeric() || c == '-' {
                 let num = self.lex_number();
                 self.push_token(loc, Token::Number(num));

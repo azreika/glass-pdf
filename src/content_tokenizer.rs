@@ -53,20 +53,14 @@ struct ContentTokenizer {
 }
 
 impl ContentTokenizer {
-    fn eat_next(&mut self) -> char {
-        let result = self.data[self.offset] as char;
-        self.offset += 1;
-        return result;
-    }
-
     fn lex_number(&mut self) -> f64 {
         let mut chars = vec![];
         if self.peek_is('-') {
-            chars.push(self.eat_next());
+            chars.push(self.lex_char());
         }
         let mut cc = self.peek();
         while cc == '.' || cc.is_numeric() {
-            chars.push(self.eat_next());
+            chars.push(self.lex_char());
             cc = self.peek();
         }
         let str: String = chars.iter().collect();
@@ -87,15 +81,9 @@ impl ContentTokenizer {
         return ContentToken::Identifier(str);
     }
 
-    fn lex_char(&mut self) -> char {
-        let result = self.peek();
-        self.offset += 1;
-        return result;
-    }
-
     fn lex_word(&mut self) -> String {
         if !is_identifier_char(self.peek()) {
-            return self.eat_next().to_string();
+            return self.lex_char().to_string();
         }
         let mut chars = vec![];
         while is_identifier_char(self.peek()) {
@@ -136,6 +124,10 @@ impl Tokenizer<ContentToken> for ContentTokenizer {
     fn peek_u8(&self) -> u8 {
         return self.data[self.offset];
     }
+
+    fn step_ahead(&mut self) {
+        self.offset += 1;
+    }
 }
 
 pub fn tokenize_stream(str: String) -> Vec<ContentToken> {
@@ -146,15 +138,15 @@ pub fn tokenize_stream(str: String) -> Vec<ContentToken> {
     while tokenizer.offset < tokenizer.data.len() {
         let cc = tokenizer.peek();
         if cc.is_whitespace() {
-            tokenizer.eat_next();
+            tokenizer.lex_char();
         } else if cc == '\0' {
-            tokenizer.eat_next();
+            tokenizer.lex_char();
             vv.push(ContentToken::Null);
         } else if cc == 'q' {
-            tokenizer.eat_next();
+            tokenizer.lex_char();
             vv.push(ContentToken::SaveGraphicsState);
         } else if cc == 'Q' {
-            tokenizer.eat_next();
+            tokenizer.lex_char();
             vv.push(ContentToken::RestoreGraphicsState);
         } else if cc.is_numeric() || cc == '.' || cc == '-' {
             let num = tokenizer.lex_number();
@@ -183,12 +175,12 @@ pub fn tokenize_stream(str: String) -> Vec<ContentToken> {
                 let mut chars = vec![];
                 let mut depth = 1;
                 while depth > 0 && tokenizer.offset < tokenizer.data.len() {
-                    let mm = tokenizer.eat_next();
+                    let mm = tokenizer.lex_char();
                     match mm {
                         '\\' => {
                             chars.push(mm);
                             if tokenizer.offset < tokenizer.data.len() {
-                                chars.push(tokenizer.eat_next()); // consume \(, \), \\, \n, etc.
+                                chars.push(tokenizer.lex_char()); // consume \(, \), \\, \n, etc.
                             }
                         },
                         ')' => {
