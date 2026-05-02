@@ -2,7 +2,7 @@ use crate::tokenizer::{Tokenizer, is_identifier_char};
 use crate::src_loc::SrcLoc;
 use std::fmt;
 
-impl Tokenizer<Token> for PdfTokenizer<'_> {
+impl Tokenizer<Token> for PdfTokenizer {
     fn token_from_word(&self, word: &str) -> Token {
         return match word {
             "xref" => Token::XRefKeyword,
@@ -27,7 +27,7 @@ impl Tokenizer<Token> for PdfTokenizer<'_> {
     }
 }
 
-impl PdfTokenizer<'_> {
+impl PdfTokenizer {
     fn lex_char(&mut self) -> char {
         return self.eat_next() as char;
     }
@@ -55,7 +55,7 @@ impl PdfTokenizer<'_> {
         self.tokens.push((loc, tok));
     }
 
-    fn new(data: &Vec<u8>) -> PdfTokenizer<'_> {
+    fn new(data: Vec<u8>) -> PdfTokenizer {
         return PdfTokenizer {
             data,
             offset: 0,
@@ -203,8 +203,8 @@ impl PdfTokenizer<'_> {
 }
 
 #[derive(Debug)]
-struct PdfTokenizer<'a> {
-    data: &'a Vec<u8>,
+struct PdfTokenizer {
+    data: Vec<u8>,
     offset: usize,
     tokens: Vec<(SrcLoc, Token)>,
 }
@@ -274,7 +274,7 @@ impl fmt::Display for Token {
 }
 
 pub fn tokenize_pdf(data: &Vec<u8>) -> Vec<(SrcLoc,Token)> {
-    let mut tokenizer = PdfTokenizer::new(data);
+    let mut tokenizer = PdfTokenizer::new(data.clone());
     tokenizer.run();
     return tokenizer.tokens;
 }
