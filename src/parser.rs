@@ -1,4 +1,5 @@
-use crate::tokenizer::{Token,SrcLoc};
+use crate::pdf_tokenizer::Token;
+use crate::src_loc::SrcLoc;
 use crate::ast::{Pdf,Block,Value};
 use std::collections::HashMap;
 

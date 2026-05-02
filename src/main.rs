@@ -5,8 +5,10 @@ mod parser;
 mod ast;
 mod content;
 mod viewer;
+mod pdf_tokenizer;
+mod src_loc;
 
-use crate::tokenizer::{tokenize_pdf};
+use crate::pdf_tokenizer::{tokenize_pdf};
 use crate::parser::{parse_tokens};
 use crate::content::{tokenize_stream};
 use crate::viewer::{view_contents};

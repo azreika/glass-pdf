@@ -1,6 +1,6 @@
 
 use std::fmt;
-use crate::tokenizer::SrcLoc;
+use crate::src_loc::SrcLoc;
 use std::collections::HashMap;
 use flate2::read::ZlibDecoder;
 use std::io::prelude::*;
