@@ -33,6 +33,7 @@ pub enum ContentToken {
 struct ContentTokenizer {
     data: Vec<u8>,
     offset: usize,
+    tokens: Vec<ContentToken>,
 }
 
 impl Tokenizer<ContentToken> for ContentTokenizer {
@@ -71,74 +72,85 @@ impl Tokenizer<ContentToken> for ContentTokenizer {
     }
 }
 
-pub fn tokenize_stream(str: String) -> Vec<ContentToken> {
-    let mut vv = vec![];
+impl ContentTokenizer {
+    fn new(data: Vec<u8>) -> Self {
+        return ContentTokenizer { data, offset: 0, tokens: vec![] };
+    }
 
-    let bytes_arr = str.as_bytes().into_iter().copied().collect();
-    let mut tokenizer = ContentTokenizer { data: bytes_arr, offset: 0 };
-    while tokenizer.offset < tokenizer.data.len() {
-        let cc = tokenizer.peek();
-        if cc.is_whitespace() {
-            tokenizer.lex_char();
-        } else if cc == '\0' {
-            tokenizer.lex_char();
-            vv.push(ContentToken::Null);
-        } else if cc == 'q' {
-            tokenizer.lex_char();
-            vv.push(ContentToken::SaveGraphicsState);
-        } else if cc == 'Q' {
-            tokenizer.lex_char();
-            vv.push(ContentToken::RestoreGraphicsState);
-        } else if cc.is_numeric() || cc == '.' || cc == '-' {
-            let num = tokenizer.lex_number();
-            vv.push(ContentToken::Number(num));
-        } else if cc == 'W' {
-            tokenizer.eat_char('W');
-            if tokenizer.peek() == '*' {
-                tokenizer.eat_char('*');
-                vv.push(ContentToken::WStarKeyword);
-            } else {
-                vv.push(ContentToken::WKeyword);
-            }
-        } else if cc == 'n' {
-            tokenizer.eat_char('n');
-            vv.push(ContentToken::NKeyword);
-        } else if cc == '/' {
-            tokenizer.eat_char('/');
-            let id = tokenizer.lex_word();
-            let id_tok = ContentToken::Identifier(id);
-            vv.push(id_tok);
-        } else {
-            let word = tokenizer.lex_word();
-            let tok = tokenizer.token_from_word(&word);
-            vv.push(tok.clone());
+    fn push_token(&mut self, tok: ContentToken) {
+        self.tokens.push(tok);
+    }
 
-            if matches!(tok, ContentToken::LParens) {
-                let mut chars = vec![];
-                let mut depth = 1;
-                while depth > 0 && tokenizer.offset < tokenizer.data.len() {
-                    let mm = tokenizer.lex_char();
-                    match mm {
-                        '\\' => {
-                            chars.push(mm);
-                            if tokenizer.offset < tokenizer.data.len() {
-                                chars.push(tokenizer.lex_char()); // consume \(, \), \\, \n, etc.
-                            }
-                        },
-                        ')' => {
-                            depth -= 1;
-                            if depth > 0 { chars.push(mm); }
-                        },
-                        '(' => { depth += 1; chars.push(mm); },
-                        _   => chars.push(mm),
-                    }
+    fn run(&mut self) {
+        while self.offset < self.data.len() {
+            let cc = self.peek();
+            if cc.is_whitespace() {
+                self.lex_char();
+            } else if cc == '\0' {
+                self.lex_char();
+                self.push_token(ContentToken::Null);
+            } else if cc == 'q' {
+                self.lex_char();
+                self.push_token(ContentToken::SaveGraphicsState);
+            } else if cc == 'Q' {
+                self.lex_char();
+                self.push_token(ContentToken::RestoreGraphicsState);
+            } else if cc.is_numeric() || cc == '.' || cc == '-' {
+                let num = self.lex_number();
+                self.push_token(ContentToken::Number(num));
+            } else if cc == 'W' {
+                self.eat_char('W');
+                if self.peek() == '*' {
+                    self.eat_char('*');
+                    self.push_token(ContentToken::WStarKeyword);
+                } else {
+                    self.push_token(ContentToken::WKeyword);
                 }
-                let str = chars.iter().collect();
-                vv.push(ContentToken::Identifier(str));
-                vv.push(ContentToken::RParens);
+            } else if cc == 'n' {
+                self.eat_char('n');
+                self.push_token(ContentToken::NKeyword);
+            } else if cc == '/' {
+                self.eat_char('/');
+                let id = self.lex_word();
+                let id_tok = ContentToken::Identifier(id);
+                self.push_token(id_tok);
+            } else {
+                let word = self.lex_word();
+                let tok = self.token_from_word(&word);
+                self.push_token(tok.clone());
+
+                if matches!(tok, ContentToken::LParens) {
+                    let mut chars = vec![];
+                    let mut depth = 1;
+                    while depth > 0 && self.offset < self.data.len() {
+                        let mm = self.lex_char();
+                        match mm {
+                            '\\' => {
+                                chars.push(mm);
+                                if self.offset < self.data.len() {
+                                    chars.push(self.lex_char()); // consume \(, \), \\, \n, etc.
+                                }
+                            },
+                            ')' => {
+                                depth -= 1;
+                                if depth > 0 { chars.push(mm); }
+                            },
+                            '(' => { depth += 1; chars.push(mm); },
+                            _   => chars.push(mm),
+                        }
+                    }
+                    let str = chars.iter().collect();
+                    self.push_token(ContentToken::Identifier(str));
+                    self.push_token(ContentToken::RParens);
+                }
             }
         }
     }
+}
 
-    return vv;
+pub fn tokenize_stream(str: String) -> Vec<ContentToken> {
+    let bytes = str.as_bytes().into_iter().copied().collect();
+    let mut tokenizer = ContentTokenizer::new(bytes);
+    tokenizer.run();
+    return tokenizer.tokens;
 }

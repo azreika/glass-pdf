@@ -2,6 +2,77 @@ use crate::tokenizer::Tokenizer;
 use crate::src_loc::SrcLoc;
 use std::fmt;
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum Token {
+    Number(i32),
+    Identifier(String),
+    String(String),
+    ByteStream(Vec<u8>),
+
+    // Special characters
+    AngleStart,
+    AngleEnd,
+    ForwardSlash,
+    LeftBracket,
+    RightBracket,
+    LeftParens,
+    RightParens,
+    Percent,
+
+    // Keywords
+    ObjKeyword,
+    EndObjKeyword,
+    StreamKeyword,
+    EndStreamKeyword,
+    XRefKeyword,
+    StartXRefKeyword,
+    TrailerKeyword,
+    RefKeyword,
+    FKeyword,
+    NKeyword,
+    EOFKeyword,
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut kw = |x| { return write!(f, "{}", x) };
+        match self {
+            Token::Number(v) => write!(f, "{}", v),
+            Token::Identifier(str) => write!(f, "{}", str),
+            Token::String(str) => write!(f, "{}", str),
+            Token::ByteStream(_) => write!(f, "<bytes...>"),
+
+            Token::AngleStart => kw("<"),
+            Token::AngleEnd => kw(">"),
+            Token::ForwardSlash => kw("/"),
+            Token::LeftBracket => kw("["),
+            Token::RightBracket => kw("]"),
+            Token::LeftParens => kw("("),
+            Token::RightParens => kw(")"),
+            Token::Percent => kw("%"),
+
+            Token::ObjKeyword => kw("obj"),
+            Token::EndObjKeyword => kw("endobj"),
+            Token::StreamKeyword => kw("stream"),
+            Token::EndStreamKeyword => kw("endstream"),
+            Token::XRefKeyword => kw("xref"),
+            Token::StartXRefKeyword => kw("startxref"),
+            Token::TrailerKeyword => kw("trailer"),
+            Token::RefKeyword => kw("R"),
+            Token::FKeyword => kw("f"),
+            Token::NKeyword => kw("n"),
+            Token::EOFKeyword => kw("EOF"),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct PdfTokenizer {
+    data: Vec<u8>,
+    offset: usize,
+    tokens: Vec<(SrcLoc, Token)>,
+}
+
 impl Tokenizer<Token> for PdfTokenizer {
     fn token_from_word(&self, word: &str) -> Token {
         return match word {
@@ -156,77 +227,6 @@ impl PdfTokenizer {
         // Consume "endstream"
         self.offset += "endstream".len();
         self.push_token(loc, Token::EndStreamKeyword);
-    }
-}
-
-#[derive(Debug)]
-struct PdfTokenizer {
-    data: Vec<u8>,
-    offset: usize,
-    tokens: Vec<(SrcLoc, Token)>,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum Token {
-    Number(i32),
-    Identifier(String),
-    String(String),
-    ByteStream(Vec<u8>),
-
-    // Special characters
-    AngleStart,
-    AngleEnd,
-    ForwardSlash,
-    LeftBracket,
-    RightBracket,
-    LeftParens,
-    RightParens,
-    Percent,
-
-    // Keywords
-    ObjKeyword,
-    EndObjKeyword,
-    StreamKeyword,
-    EndStreamKeyword,
-    XRefKeyword,
-    StartXRefKeyword,
-    TrailerKeyword,
-    RefKeyword,
-    FKeyword,
-    NKeyword,
-    EOFKeyword,
-}
-
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut kw = |x| { return write!(f, "{}", x) };
-        match self {
-            Token::Number(v) => write!(f, "{}", v),
-            Token::Identifier(str) => write!(f, "{}", str),
-            Token::String(str) => write!(f, "{}", str),
-            Token::ByteStream(_) => write!(f, "<bytes...>"),
-
-            Token::AngleStart => kw("<"),
-            Token::AngleEnd => kw(">"),
-            Token::ForwardSlash => kw("/"),
-            Token::LeftBracket => kw("["),
-            Token::RightBracket => kw("]"),
-            Token::LeftParens => kw("("),
-            Token::RightParens => kw(")"),
-            Token::Percent => kw("%"),
-
-            Token::ObjKeyword => kw("obj"),
-            Token::EndObjKeyword => kw("endobj"),
-            Token::StreamKeyword => kw("stream"),
-            Token::EndStreamKeyword => kw("endstream"),
-            Token::XRefKeyword => kw("xref"),
-            Token::StartXRefKeyword => kw("startxref"),
-            Token::TrailerKeyword => kw("trailer"),
-            Token::RefKeyword => kw("R"),
-            Token::FKeyword => kw("f"),
-            Token::NKeyword => kw("n"),
-            Token::EOFKeyword => kw("EOF"),
-        }
     }
 }
 
