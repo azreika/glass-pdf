@@ -119,7 +119,7 @@ impl Parser {
     }
 
     fn next_token(&mut self) -> ContentToken {
-        let tok = self.tokens[self.offset].clone();
+        let tok = self.peek();
         self.offset += 1;
         return tok;
     }
@@ -204,23 +204,31 @@ impl Parser {
         }
     }
 
+    fn parse_value1(&mut self) -> Value {
+        let tok = self.next_token();
+        return match tok {
+            ContentToken::Identifier(id) => Value::Identifier(id.to_string()),
+            ContentToken::Number(x) => Value::Number(x),
+            ContentToken::LParens => self.parse_parens(),
+            ContentToken::LBracket => self.parse_array(),
+            _ => {
+                println!("Unexpected token {:?}", tok);
+                panic!();
+            }
+        }
+    }
+
+    fn peek(&self) -> ContentToken {
+        return self.tokens[self.offset].clone();
+    }
+
     fn parse_parens(&mut self) -> Value {
         let mut stack = vec![];
 
-        let mut tok = self.next_token();
-        while !matches!(tok, ContentToken::RParens) {
-            if matches!(tok, ContentToken::LParens) {
-                let expr = self.parse_parens();
-                stack.push(expr);
-            } else if matches!(tok, ContentToken::Identifier(_)) {
-                stack.push(Value::Identifier(tok.ident()));
-            } else {
-                println!("Unhandled op in parens parse: {:?}", tok);
-                println!("{:?}", stack);
-                panic!();
-            }
-            tok = self.next_token();
+        while !matches!(self.peek(), ContentToken::RParens) {
+            stack.push(self.parse_value1());
         }
+        self.next_token();
 
         assert_eq!(stack.len(), 1);
         return stack[0].clone();
@@ -229,22 +237,12 @@ impl Parser {
     fn parse_array(&mut self) -> Value {
         let mut arr = vec![];
 
-        let mut tok = self.next_token();
-        while !matches!(tok, ContentToken::RBracket) {
-            assert!(!matches!(tok, ContentToken::LBracket));
-            if matches!(tok, ContentToken::Number(_)) {
-                let expr = tok.value();
-                arr.push(Box::new(Value::Number(expr)));
-            } else if matches!(tok, ContentToken::LParens) {
-                let expr = self.parse_parens();
-                arr.push(Box::new(expr));
-            } else {
-                println!("Unhandled op in bracket parse: {:?}", tok);
-                println!("{:?}", arr);
-                panic!()
-            }
-            tok = self.next_token();
+        while !matches!(self.peek(), ContentToken::RBracket) {
+            assert!(!matches!(self.peek(), ContentToken::LBracket));
+            let expr = self.parse_value1();
+            arr.push(Box::new(expr));
         }
+        self.next_token();
         return Value::Array(arr);
     }
 
@@ -252,26 +250,15 @@ impl Parser {
         assert!(matches!(self.next_token(), ContentToken::BTKeyword));
         let mut stack = vec![];
 
-        let mut tok = self.next_token();
-        while !matches!(tok, ContentToken::ETKeyword) {
-            if self.is_operator(&tok) {
+        while !matches!(self.peek(), ContentToken::ETKeyword) {
+            if self.is_operator(&self.peek()) {
+                let tok = self.next_token();
                 self.process_op(&mut stack, &tok);
-            } else if matches!(tok, ContentToken::Identifier(_)) {
-                stack.push(Value::Identifier(tok.ident()));
-            } else if matches!(tok, ContentToken::LParens)   {
-                stack.push(self.parse_parens());
-            } else if matches!(tok, ContentToken::LBracket) {
-                stack.push(self.parse_array());
-            } else {
-                if !(matches!(tok, ContentToken::Number(_))) {
-                    println!("Unhandled op in text block parse: {:?}", tok);
-                    println!("{:?}", stack);
-                    panic!();
-                }
-                stack.push(Value::Number(tok.value()));
+                continue;
             }
-            tok = self.next_token();
+            stack.push(self.parse_value1());
         }
+        self.next_token();
 
         assert!(stack.is_empty());
         self.reset_text_state();

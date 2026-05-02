@@ -30,22 +30,6 @@ pub enum ContentToken {
     Null,
 }
 
-impl ContentToken {
-    pub fn value(&self) -> f64 {
-        return match self {
-            ContentToken::Number(v) => *v,
-            _ => panic!(),
-        }
-    }
-
-    pub fn ident(&self) -> String {
-        return match self {
-            ContentToken::Identifier(v) => v.clone(),
-            _ => panic!(),
-        }
-    }
-}
-
 struct ContentTokenizer {
     data: Vec<u8>,
     offset: usize,
