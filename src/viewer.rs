@@ -101,6 +101,10 @@ impl Parser {
         return self.text_state.matrix[7] as i32;
     }
 
+    fn x(&self) -> i32 {
+        return self.text_state.matrix[6] as i32;
+    }
+
     fn pop_number(stack: &mut Vec<Value>) -> f64 {
         return match stack.pop().unwrap() {
             Value::Number(v) => v,
@@ -134,7 +138,9 @@ impl Parser {
         let x_scale = self.text_state.matrix[0] as f32;
         let init_size = self.curr_size();
         let size = init_size * x_scale;
+        let x_pos = self.x();
         let entry = self.output.entry(self.y()).or_insert(TextInfo {
+            x: x_pos,
             txt: String::new(),
             size: size,
         });
@@ -232,6 +238,7 @@ impl Parser {
 
 #[derive(Clone, Debug)]
 struct TextInfo {
+    x: i32,
     txt: String,
     size: f32,
 }
@@ -262,12 +269,23 @@ impl <Message> canvas::Program<Message> for Page {
         f1.fill(&outer_rect, Color::from_rgb(0.2, 0.5, 1.0));
         geom.push(f1.into_geometry());
 
+        // inner rectangle
+        let mut f2 = Frame::new(renderer, bounds.size());
+        let inner_size = iced::Size {
+            width: bounds.size().width - self.padding_x*2.0,
+            height: bounds.size().height - self.padding_y*2.0,
+        };
+
+        let inner_rect = canvas::Path::rectangle(Point { x: self.padding_x, y: self.padding_y}, inner_size);
+        f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
+        geom.push(f2.into_geometry());
+
         for (pos, info) in self.output.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
             let mut txt = canvas::Text::from(
                 info.txt.clone()
             );
-            txt.position = Point::new(self.padding_x, *pos as f32 + self.padding_y);
+            txt.position = Point::new(self.padding_x + info.x as f32, *pos as f32 + self.padding_y);
             txt.size = info.size.into();
             frame.fill_text(txt);
             geom.push(frame.into_geometry());
