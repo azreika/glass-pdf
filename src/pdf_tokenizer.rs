@@ -4,7 +4,7 @@ use std::fmt;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum PdfToken {
-    Number(i32),
+    Number(f32),
     Identifier(String),
     String(String),
     ByteStream(Vec<u8>),
@@ -31,6 +31,10 @@ pub enum PdfToken {
     FKeyword,
     NKeyword,
     EOFKeyword,
+
+    BooleanTrue,
+    BooleanFalse,
+    Null,
 }
 
 impl fmt::Display for PdfToken {
@@ -62,6 +66,9 @@ impl fmt::Display for PdfToken {
             PdfToken::FKeyword => kw("f"),
             PdfToken::NKeyword => kw("n"),
             PdfToken::EOFKeyword => kw("EOF"),
+            PdfToken::BooleanTrue => kw("true"),
+            PdfToken::BooleanFalse => kw("false"),
+            PdfToken::Null => kw("null"),
         }
     }
 }
@@ -90,8 +97,11 @@ impl Tokenizer<PdfToken> for PdfTokenizer {
             "]" => PdfToken::RightBracket,
             ">" => PdfToken::AngleEnd,
             "/" => PdfToken::ForwardSlash,
+            "true" => PdfToken::BooleanTrue,
+            "false" => PdfToken::BooleanFalse,
+            "null" => PdfToken::Null,
             _ => {
-                println!("FAILURE!!! {word} @ loc{{{}}}/{}", self.offset, self.data.len());
+                println!("FAILURE!!! `{word}` @ loc{{{}}}/{}", self.offset, self.data.len());
                 panic!();
             }
         }
@@ -205,8 +215,15 @@ impl PdfTokenizer {
         }
     }
 
-    fn lex_stream_body(&mut self, loc: SrcLoc) {
+    fn eat_newline(&mut self) {
+        if self.peek_is('\r') {
+            self.eat_char('\r');
+        }
         self.eat_char('\n');
+    }
+
+    fn lex_stream_body(&mut self, loc: SrcLoc) {
+        self.eat_newline();
         let start = self.offset;
 
         // Scan for "endstream" marker

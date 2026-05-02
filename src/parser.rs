@@ -57,13 +57,10 @@ fn get_str(tok: &PdfToken) -> String {
 }
 
 
-fn get_num(tok: &PdfToken) -> i32 {
+fn get_num(tok: &PdfToken) -> f32 {
     return match tok {
         PdfToken::Number(v) => *v,
-        _ => {
-            assert!(false);
-            0
-        }
+        _ => panic!(),
     };
 }
 
@@ -85,7 +82,7 @@ pub fn parse_tokens(tokens: &Vec<(SrcLoc, PdfToken)>) -> Pdf {
 impl Parser<'_> {
     fn run_parser(&mut self) -> Pdf {
         let mut blocks = vec![];
-        let mut start_xref = 0;
+        let mut start_xref = 0.0;
         let mut xref = vec![];
         while self.offset < self.tokens.len() {
             let tok = self.peek();
@@ -124,7 +121,7 @@ impl Parser<'_> {
                     self.eat_expected(PdfToken::StartXRefKeyword);
                     let v1 = self.eat_next_token();
                     assert!(is_num(&v1));
-                    assert_eq!(start_xref, 0);
+                    assert_eq!(start_xref, 0.0);
                     start_xref = get_num(&v1);
                     self.eat_expected(PdfToken::EOFKeyword);
                 },
@@ -210,7 +207,7 @@ impl Parser<'_> {
         }
     }
 
-    fn read_number(&mut self) -> i32 {
+    fn read_number(&mut self) -> f32 {
         let tok = self.eat_next_token();
         if !is_num(&tok) {
             println!("Expected number, got {}", tok);
@@ -247,8 +244,8 @@ impl Parser<'_> {
 
         let value = self.eat_value();
         let result = Block::Object {
-            id: num1,
-            gxn: num2,
+            id: num1 as i32,
+            gxn: num2 as i32,
             body: value,
             loc: loc,
         };
@@ -293,7 +290,7 @@ impl Parser<'_> {
                         continue;
                     }
                     assert!(self.eat_next_token() == PdfToken::RefKeyword);
-                    items.push(Value::Reference { id: v1, gxn: v2 });
+                    items.push(Value::Reference { id: v1 as i32, gxn: v2 as i32});
                 } else {
                     items.push(self.eat_value());
                 }
@@ -305,7 +302,7 @@ impl Parser<'_> {
             if is_num(&self.peek()) {
                 let v2 = self.eat_next_token();
                 assert!(self.eat_next_token() == PdfToken::RefKeyword);
-                return Value::Reference { id: get_num(&vv), gxn: get_num(&v2) }
+                return Value::Reference { id: get_num(&vv) as i32, gxn: get_num(&v2) as i32 }
             } else {
                 return Value::Number(get_num(&vv));
             }

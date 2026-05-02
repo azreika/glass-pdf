@@ -160,6 +160,7 @@ impl Parser {
             ContentToken::TfKeyword => {
                 let size = Self::pop_number(stack);
                 let font = Self::pop_string(stack);
+                println!("Font to use: {:?}", font);
                 self.text_state.font = Some(font);
                 self.text_state.size = Some(size);
             },

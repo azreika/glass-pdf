@@ -20,7 +20,7 @@ pub enum Block {
 #[derive(Debug)]
 pub enum Value {
     ByteStream(Box<Value>, Vec<u8>),
-    Number(i32),
+    Number(f32),
     Reference { id: i32, gxn: i32 },
     Dict(HashMap<String,Value>),
     Vector(Vec<Value>),

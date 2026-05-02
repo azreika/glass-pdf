@@ -63,5 +63,5 @@ pub trait Tokenizer<T> {
 }
 
 fn is_identifier_char(c: char) -> bool {
-    return c.is_alphanumeric() || matches!(c, '.' | '-' | '+');
+    return c.is_alphanumeric() || matches!(c, '.' | '-' | '+' | '_');
 }
