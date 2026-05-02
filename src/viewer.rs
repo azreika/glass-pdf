@@ -26,34 +26,6 @@ enum Value {
     Array (Vec<Box<Value>>),
 }
 
-impl Value {
-    fn value(&self) -> f64 {
-        return match self {
-            Value::Number(v) => *v,
-            _ => panic!(),
-        }
-    }
-
-    fn str(&self) -> String {
-        return match self {
-            Value::Identifier(v) => v.clone(),
-            Value::Number(v) => v.to_string(),
-            _ => {
-                panic!();
-            },
-        }
-    }
-
-    fn arr(&self) -> Vec<Box<Value>> {
-        return match self {
-            Value::Array(arr) => arr.clone().to_vec(),
-            _ => {
-                panic!();
-            },
-        }
-    }
-}
-
 struct Viewer {
     output: HashMap<i32, TextInfo>
 }
@@ -103,13 +75,6 @@ impl Parser {
         text_vec.sort_by(|a,b| a.0.cmp(b.0));
         text_vec.reverse();
 
-        println!("--- Text ---");
-        println!("--- --- ---");
-
-        for (_, info) in text_vec.iter() {
-            println!("{}", info.txt);
-        }
-
         let output = self.output.clone();
         iced::application(
             move || (Viewer { output: output.clone() }, iced::Task::none()),
@@ -137,15 +102,24 @@ impl Parser {
     }
 
     fn pop_number(stack: &mut Vec<Value>) -> f64 {
-        return stack.pop().unwrap().value();
+        return match stack.pop().unwrap() {
+            Value::Number(v) => v,
+            other => panic!("expected number, got {:?}", other)
+        };
     }
 
     fn pop_string(stack: &mut Vec<Value>) -> String {
-        return stack.pop().unwrap().str();
+        return match stack.pop().unwrap() {
+            Value::Identifier(v) => v,
+            other => panic!("expected number, got {:?}", other)
+        };
     }
 
     fn pop_array(stack: &mut Vec<Value>) -> Vec<Box<Value>> {
-        return stack.pop().unwrap().arr();
+        return match stack.pop().unwrap() {
+            Value::Array(arr) => arr,
+            other => panic!("expected number, got {:?}", other)
+        };
     }
 
     fn curr_size(&self) -> f32 {
@@ -191,16 +165,15 @@ impl Parser {
             ContentToken::TJKeyword => {
                 // show one or mroe
                 let arr = Self::pop_array(stack);
-                for val in arr.iter() {
-                    if matches!(**val, Value::Number(_)) {
-                        // self.output += &format!("<space_{:?}>", val.value());
-                    } else {
-                        assert!(matches!(**val, Value::Identifier(_)));
-                        self.add_output(&val.str());
+                for val in arr {
+                    match *val {
+                        Value::Number(_) => {},
+                        Value::Identifier(id) => self.add_output(&id.to_string()),
+                        other => panic!("unexpected array value {:?}", other),
                     }
                 }
             }
-            _ => panic!(),
+            _ => panic!("Unexpected operator {:?}", tok),
         }
     }
 
@@ -211,10 +184,7 @@ impl Parser {
             ContentToken::Number(x) => Value::Number(x),
             ContentToken::LParens => self.parse_parens(),
             ContentToken::LBracket => self.parse_array(),
-            _ => {
-                println!("Unexpected token {:?}", tok);
-                panic!();
-            }
+            _ => panic!("Unexpected token {:?}", tok),
         }
     }
 
@@ -223,15 +193,9 @@ impl Parser {
     }
 
     fn parse_parens(&mut self) -> Value {
-        let mut stack = vec![];
-
-        while !matches!(self.peek(), ContentToken::RParens) {
-            stack.push(self.parse_value());
-        }
-        self.next_token();
-
-        assert_eq!(stack.len(), 1);
-        return stack[0].clone();
+        let result = self.parse_value();
+        assert!(matches!(self.next_token(), ContentToken::RParens));
+        return result;
     }
 
     fn parse_array(&mut self) -> Value {
@@ -312,7 +276,6 @@ impl <Message> canvas::Program<Message> for Page {
         return geom;
     }
 }
-
 
 struct TextState {
     matrix: Vec<f64>,

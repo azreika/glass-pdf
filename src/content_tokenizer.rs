@@ -33,7 +33,6 @@ pub enum ContentToken {
 struct ContentTokenizer {
     data: Vec<u8>,
     offset: usize,
-    missed_words: u32,
 }
 
 impl Tokenizer<ContentToken> for ContentTokenizer {
@@ -76,7 +75,7 @@ pub fn tokenize_stream(str: String) -> Vec<ContentToken> {
     let mut vv = vec![];
 
     let bytes_arr = str.as_bytes().into_iter().copied().collect();
-    let mut tokenizer = ContentTokenizer { data: bytes_arr, offset: 0, missed_words: 0 };
+    let mut tokenizer = ContentTokenizer { data: bytes_arr, offset: 0 };
     while tokenizer.offset < tokenizer.data.len() {
         let cc = tokenizer.peek();
         if cc.is_whitespace() {
@@ -140,8 +139,6 @@ pub fn tokenize_stream(str: String) -> Vec<ContentToken> {
             }
         }
     }
-
-    println!("Numebr of missed words: {}", tokenizer.missed_words);
 
     return vv;
 }
