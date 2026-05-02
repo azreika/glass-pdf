@@ -204,7 +204,7 @@ impl Parser {
         }
     }
 
-    fn parse_value1(&mut self) -> Value {
+    fn parse_value(&mut self) -> Value {
         let tok = self.next_token();
         return match tok {
             ContentToken::Identifier(id) => Value::Identifier(id.to_string()),
@@ -226,7 +226,7 @@ impl Parser {
         let mut stack = vec![];
 
         while !matches!(self.peek(), ContentToken::RParens) {
-            stack.push(self.parse_value1());
+            stack.push(self.parse_value());
         }
         self.next_token();
 
@@ -239,7 +239,7 @@ impl Parser {
 
         while !matches!(self.peek(), ContentToken::RBracket) {
             assert!(!matches!(self.peek(), ContentToken::LBracket));
-            let expr = self.parse_value1();
+            let expr = self.parse_value();
             arr.push(Box::new(expr));
         }
         self.next_token();
@@ -256,7 +256,7 @@ impl Parser {
                 self.process_op(&mut stack, &tok);
                 continue;
             }
-            stack.push(self.parse_value1());
+            stack.push(self.parse_value());
         }
         self.next_token();
 
