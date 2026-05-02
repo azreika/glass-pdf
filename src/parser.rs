@@ -151,8 +151,8 @@ impl Parser<'_> {
 
     fn eat_bytestream(&mut self) -> Vec<u8> {
         assert!(self.eat_next_token() == PdfToken::StreamKeyword);
-                        assert!(is_bytestream(&self.peek()));
-                        let mut bytes = vec![];
+        assert!(is_bytestream(&self.peek()));
+        let mut bytes = vec![];
         let mut bytes_tok = self.eat_next_token();
         while is_bytestream(&bytes_tok) {
             for bb in get_bytes(&bytes_tok) {
@@ -299,7 +299,7 @@ impl Parser<'_> {
                 }
             }
             self.eat_expected(PdfToken::RightBracket);
-            return Value::Vector(Box::new(items));
+            return Value::Vector(items);
         } else if is_num(&self.peek()) {
             let vv = self.eat_next_token();
             if is_num(&self.peek()) {

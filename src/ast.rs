@@ -22,8 +22,8 @@ pub enum Value {
     ByteStream(Box<Value>, Vec<u8>),
     Number(i32),
     Reference { id: i32, gxn: i32 },
-    Dict(Box<HashMap<String,Value>>),
-    Vector(Box<Vec<Value>>),
+    Dict(HashMap<String,Value>),
+    Vector(Vec<Value>),
     Identifier(String),
 }
 
@@ -36,7 +36,7 @@ impl Value {
     }
 
     pub fn from_dict(dict: HashMap<String, Value>) -> Value {
-        return Value::Dict(Box::new(dict));
+        return Value::Dict(dict);
     }
 
     pub fn obj_matches(obj: &Value, t_id: i32, t_gxn: i32) -> bool {
@@ -60,7 +60,7 @@ impl Value {
         }
     }
 
-    pub fn get_vec(&self) -> &Box<Vec<Value>> {
+    pub fn get_vec(&self) -> &Vec<Value> {
         match self {
             Value::Vector(vec) => return vec,
             _ => panic!(),
