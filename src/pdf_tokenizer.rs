@@ -1,4 +1,4 @@
-use crate::tokenizer::{Tokenizer, is_identifier_char};
+use crate::tokenizer::Tokenizer;
 use crate::src_loc::SrcLoc;
 use std::fmt;
 
@@ -36,11 +36,6 @@ impl Tokenizer<Token> for PdfTokenizer {
 }
 
 impl PdfTokenizer {
-    fn eat_char(&mut self, c: char) {
-        assert!(self.peek_is(c));
-        self.offset += 1;
-    }
-
     fn push_token(&mut self, loc: SrcLoc, tok: Token) {
         self.tokens.push((loc, tok));
     }
@@ -55,20 +50,6 @@ impl PdfTokenizer {
 
     fn src_loc(&self) -> SrcLoc {
         return SrcLoc::new(self.offset);
-    }
-
-    fn lex_number(&mut self) -> i32 {
-        let negative = self.peek_is('-');
-        if negative {
-            self.eat_char('-');
-        }
-
-        let mut num = 0;
-        while self.peek().is_numeric() {
-            num *= 10;
-            num += self.lex_char().to_digit(10).unwrap() as i32;
-        }
-        return if negative { -num } else { num };
     }
 
     fn eat_whitespace(&mut self) {
@@ -151,20 +132,6 @@ impl PdfTokenizer {
                 }
             }
         }
-    }
-
-    // Lex the next word or delimiter in the byte sequence
-    fn lex_word(&mut self) -> String {
-        if !is_identifier_char(self.peek()) {
-            return self.lex_char().to_string();
-        }
-
-        let mut chars = vec![];
-        while is_identifier_char(self.peek()) {
-            chars.push(self.lex_char());
-        }
-        let str = chars.iter().collect();
-        return str;
     }
 
     fn lex_stream_body(&mut self, loc: SrcLoc) {

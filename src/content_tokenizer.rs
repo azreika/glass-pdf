@@ -1,4 +1,4 @@
-use crate::tokenizer::{Tokenizer, is_identifier_char};
+use crate::tokenizer::Tokenizer;
 
 #[derive(Clone, Debug)]
 pub enum ContentToken {
@@ -50,48 +50,6 @@ struct ContentTokenizer {
     data: Vec<u8>,
     offset: usize,
     missed_words: u32,
-}
-
-impl ContentTokenizer {
-    fn lex_number(&mut self) -> f64 {
-        let mut chars = vec![];
-        if self.peek_is('-') {
-            chars.push(self.lex_char());
-        }
-        let mut cc = self.peek();
-        while cc == '.' || cc.is_numeric() {
-            chars.push(self.lex_char());
-            cc = self.peek();
-        }
-        let str: String = chars.iter().collect();
-        return str.parse().unwrap();
-    }
-
-    fn eat_char(&mut self, c: char) {
-        assert!(self.peek_is(c));
-        self.offset += 1;
-    }
-
-    fn lex_identifier(&mut self) -> ContentToken {
-        let mut chars = vec![];
-        while is_identifier_char(self.peek()) {
-            chars.push(self.lex_char());
-        }
-        let str = chars.iter().collect();
-        return ContentToken::Identifier(str);
-    }
-
-    fn lex_word(&mut self) -> String {
-        if !is_identifier_char(self.peek()) {
-            return self.lex_char().to_string();
-        }
-        let mut chars = vec![];
-        while is_identifier_char(self.peek()) {
-            chars.push(self.lex_char());
-        }
-        let str = chars.iter().collect();
-        return str;
-    }
 }
 
 impl Tokenizer<ContentToken> for ContentTokenizer {
@@ -164,8 +122,9 @@ pub fn tokenize_stream(str: String) -> Vec<ContentToken> {
             vv.push(ContentToken::NKeyword);
         } else if cc == '/' {
             tokenizer.eat_char('/');
-            let id = tokenizer.lex_identifier();
-            vv.push(id);
+            let id = tokenizer.lex_word();
+            let id_tok = ContentToken::Identifier(id);
+            vv.push(id_tok);
         } else {
             let word = tokenizer.lex_word();
             let tok = tokenizer.token_from_word(&word);
