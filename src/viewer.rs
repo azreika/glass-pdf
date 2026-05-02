@@ -12,7 +12,6 @@ pub fn view_contents(tokens: &Vec<ContentToken>) {
     parser.parse_program();
 }
 
-
 struct Parser {
     tokens: Vec<ContentToken>,
     offset: usize,

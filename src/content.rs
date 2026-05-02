@@ -1,3 +1,5 @@
+use crate::tokenizer::is_identifier_char;
+
 #[derive(Clone, Debug)]
 pub enum ContentToken {
     SaveGraphicsState,
@@ -136,10 +138,6 @@ impl ContentTokenizer {
             }
         }
     }
-}
-
-fn is_identifier_char(c: char) -> bool {
-    return c.is_alphanumeric() || matches!(c, '.' | '-' | '+');
 }
 
 pub fn tokenize_stream(str: String) -> Vec<ContentToken> {

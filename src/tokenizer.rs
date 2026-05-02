@@ -1,6 +1,6 @@
 use std::fmt;
 
-fn is_identifier_char(c: char) -> bool {
+pub fn is_identifier_char(c: char) -> bool {
     return c.is_alphanumeric() || matches!(c, '.' | '-' | '+');
 }
 
@@ -23,7 +23,7 @@ impl fmt::Display for SrcLoc {
     }
 }
 
-impl Tokenizer<'_> {
+impl PdfTokenizer<'_> {
     fn lex_char(&mut self) -> char {
         return self.eat_next() as char;
     }
@@ -51,8 +51,8 @@ impl Tokenizer<'_> {
         self.tokens.push((loc, tok));
     }
 
-    fn new(data: &Vec<u8>) -> Tokenizer<'_> {
-        return Tokenizer {
+    fn new(data: &Vec<u8>) -> PdfTokenizer<'_> {
+        return PdfTokenizer {
             data,
             offset: 0,
             tokens: vec![],
@@ -223,7 +223,7 @@ impl Tokenizer<'_> {
 }
 
 #[derive(Debug)]
-struct Tokenizer<'a> {
+struct PdfTokenizer<'a> {
     data: &'a Vec<u8>,
     offset: usize,
     tokens: Vec<(SrcLoc, Token)>,
@@ -294,7 +294,7 @@ impl fmt::Display for Token {
 }
 
 pub fn tokenize_pdf(data: &Vec<u8>) -> Vec<(SrcLoc,Token)> {
-    let mut tokenizer = Tokenizer::new(data);
+    let mut tokenizer = PdfTokenizer::new(data);
     tokenizer.run();
     return tokenizer.tokens;
 }
