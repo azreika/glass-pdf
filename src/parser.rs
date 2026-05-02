@@ -1,44 +1,44 @@
-use crate::pdf_tokenizer::Token;
+use crate::pdf_tokenizer::PdfToken;
 use crate::src_loc::SrcLoc;
 use crate::ast::{Pdf,Block,Value};
 use std::collections::HashMap;
 
 struct Parser<'a> {
-    tokens: &'a Vec<(SrcLoc, Token)>,
+    tokens: &'a Vec<(SrcLoc, PdfToken)>,
     offset: usize,
 }
 
-fn is_string(tok: &Token) -> bool {
+fn is_string(tok: &PdfToken) -> bool {
     return match tok {
-        Token::String(_) => true,
+        PdfToken::String(_) => true,
         _ => false,
     }
 }
 
-fn is_identifier(tok: &Token) -> bool {
+fn is_identifier(tok: &PdfToken) -> bool {
     return match tok {
-        Token::Identifier(_) => true,
+        PdfToken::Identifier(_) => true,
         _ => false,
     }
 }
 
-fn is_num(tok: &Token) -> bool {
+fn is_num(tok: &PdfToken) -> bool {
     return match tok {
-        Token::Number(_) => true,
+        PdfToken::Number(_) => true,
         _ => false,
     }
 }
 
-fn is_bytestream(tok: &Token) -> bool {
+fn is_bytestream(tok: &PdfToken) -> bool {
     return match tok {
-        Token::ByteStream(_) => true,
+        PdfToken::ByteStream(_) => true,
         _ => false,
     }
 }
 
-fn get_id(tok: &Token) -> String {
+fn get_id(tok: &PdfToken) -> String {
     return match tok {
-        Token::Identifier(x) => x.to_string(),
+        PdfToken::Identifier(x) => x.to_string(),
         _ => {
             assert!(false);
             "".to_string()
@@ -46,9 +46,9 @@ fn get_id(tok: &Token) -> String {
     }
 }
 
-fn get_str(tok: &Token) -> String {
+fn get_str(tok: &PdfToken) -> String {
     return match tok {
-        Token::String(x) => x.to_string(),
+        PdfToken::String(x) => x.to_string(),
         _ => {
             assert!(false);
             "".to_string()
@@ -57,9 +57,9 @@ fn get_str(tok: &Token) -> String {
 }
 
 
-fn get_num(tok: &Token) -> i32 {
+fn get_num(tok: &PdfToken) -> i32 {
     return match tok {
-        Token::Number(v) => *v,
+        PdfToken::Number(v) => *v,
         _ => {
             assert!(false);
             0
@@ -67,9 +67,9 @@ fn get_num(tok: &Token) -> i32 {
     };
 }
 
-fn get_bytes(tok: &Token) -> Vec<u8> {
+fn get_bytes(tok: &PdfToken) -> Vec<u8> {
     return match tok {
-        Token::ByteStream(bytes) => bytes.clone().to_vec(),
+        PdfToken::ByteStream(bytes) => bytes.clone().to_vec(),
         _ => {
             assert!(false);
             vec![]
@@ -77,7 +77,7 @@ fn get_bytes(tok: &Token) -> Vec<u8> {
     }
 }
 
-pub fn parse_tokens(tokens: &Vec<(SrcLoc, Token)>) -> Pdf {
+pub fn parse_tokens(tokens: &Vec<(SrcLoc, PdfToken)>) -> Pdf {
     let mut parser = Parser { tokens, offset: 0 };
     return parser.run_parser();
 }
@@ -90,43 +90,43 @@ impl Parser<'_> {
         while self.offset < self.tokens.len() {
             let tok = self.peek();
             match tok {
-                Token::Percent => {
+                PdfToken::Percent => {
                     self.eat_next_token();
                     assert!(is_string(&self.peek()));
                     self.eat_next_token();
                 },
-                Token::Number(_) => {
+                PdfToken::Number(_) => {
                     let obj = self.eat_object();
                     blocks.push(obj);
                 },
-                Token::XRefKeyword => {
+                PdfToken::XRefKeyword => {
                     self.eat_next_token();
                     let v1 = self.eat_next_token();
                     assert!(is_num(&v1));
                     let v2 = self.eat_next_token();
                     assert!(is_num(&v2));
 
-                    while self.peek() != Token::TrailerKeyword {
+                    while self.peek() != PdfToken::TrailerKeyword {
                         let v1 = self.eat_next_token();
                         assert!(is_num(&v1));
                         let offset = get_num(&v1);
                         let v2 = self.eat_next_token();
                         assert!(is_num(&v2));
                         let kk = self.eat_next_token();
-                        assert!(kk == Token::FKeyword || kk == Token::NKeyword);
+                        assert!(kk == PdfToken::FKeyword || kk == PdfToken::NKeyword);
                         xref.push(SrcLoc::new(offset as usize));
                     }
                 },
-                Token::TrailerKeyword => {
+                PdfToken::TrailerKeyword => {
                     self.eat_next_token();
                     let result = self.eat_dictionary();
                     blocks.push(Block::Trailer(result));
-                    self.eat_expected(Token::StartXRefKeyword);
+                    self.eat_expected(PdfToken::StartXRefKeyword);
                     let v1 = self.eat_next_token();
                     assert!(is_num(&v1));
                     assert_eq!(start_xref, 0);
                     start_xref = get_num(&v1);
-                    self.eat_expected(Token::EOFKeyword);
+                    self.eat_expected(PdfToken::EOFKeyword);
                 },
                 _ => {
                     println!("{:?}", blocks);
@@ -143,14 +143,14 @@ impl Parser<'_> {
     }
 
     fn peek_is_dict(&self) -> bool {
-        if self.peek() != Token::AngleStart {
+        if self.peek() != PdfToken::AngleStart {
             return false;
         }
-        return self.peek_nth(1) == Token::AngleStart;
+        return self.peek_nth(1) == PdfToken::AngleStart;
     }
 
     fn eat_bytestream(&mut self) -> Vec<u8> {
-        assert!(self.eat_next_token() == Token::StreamKeyword);
+        assert!(self.eat_next_token() == PdfToken::StreamKeyword);
                         assert!(is_bytestream(&self.peek()));
                         let mut bytes = vec![];
         let mut bytes_tok = self.eat_next_token();
@@ -160,7 +160,7 @@ impl Parser<'_> {
             }
             bytes_tok = self.eat_next_token();
         }
-        assert!(bytes_tok == Token::EndStreamKeyword);
+        assert!(bytes_tok == PdfToken::EndStreamKeyword);
         return bytes;
     }
 
@@ -170,7 +170,7 @@ impl Parser<'_> {
 
     fn expect_end_object(&mut self) {
         let token = self.eat_next_token();
-        if token != Token::EndObjKeyword {
+        if token != PdfToken::EndObjKeyword {
             println!("Expected end of object, but got `{}`.", token);
             self.throw_error();
         }
@@ -183,22 +183,22 @@ impl Parser<'_> {
     fn eat_dictionary(&mut self) -> HashMap<String,Value> {
         let mut result = HashMap::new();
 
-        self.eat_expected(Token::AngleStart);
-        self.eat_expected(Token::AngleStart);
+        self.eat_expected(PdfToken::AngleStart);
+        self.eat_expected(PdfToken::AngleStart);
 
         loop {
-            if self.peek() == Token::AngleEnd {
+            if self.peek() == PdfToken::AngleEnd {
                 break;
             }
-            assert!(self.eat_next_token() == Token::ForwardSlash);
+            assert!(self.eat_next_token() == PdfToken::ForwardSlash);
             let tok = self.eat_next_token();
             assert!(is_identifier(&tok));
 
             let val = self.eat_value();
             result.insert(get_id(&tok), val);
         }
-        self.eat_expected(Token::AngleEnd);
-        self.eat_expected(Token::AngleEnd);
+        self.eat_expected(PdfToken::AngleEnd);
+        self.eat_expected(PdfToken::AngleEnd);
         return result;
     }
 
@@ -218,21 +218,21 @@ impl Parser<'_> {
         return get_num(&tok);
     }
 
-    fn peek(&self) -> Token {
+    fn peek(&self) -> PdfToken {
         return self.tokens[self.offset].1.clone();
     }
 
-    fn peek_nth(&self, n: usize) -> Token {
+    fn peek_nth(&self, n: usize) -> PdfToken {
         return self.tokens[self.offset+n].1.clone();
     }
 
-    fn eat_next_token(&mut self) -> Token {
+    fn eat_next_token(&mut self) -> PdfToken {
         let result = self.peek();
         self.offset += 1;
         return result;
     }
 
-    fn eat_expected(&mut self, tok: Token) {
+    fn eat_expected(&mut self, tok: PdfToken) {
         let result = self.eat_next_token();
         assert_eq!(result, tok);
     }
@@ -242,7 +242,7 @@ impl Parser<'_> {
         let num1 = get_num(&self.eat_next_token());
         assert!(is_num(&self.peek()));
         let num2 = get_num(&self.eat_next_token());
-        assert!(self.peek() == Token::ObjKeyword);
+        assert!(self.peek() == PdfToken::ObjKeyword);
         self.eat_next_token();
 
         let value = self.eat_value();
@@ -259,23 +259,23 @@ impl Parser<'_> {
     fn eat_value(&mut self) -> Value {
         if self.peek_is_dict() {
             let result = Value::from_dict(self.eat_dictionary());
-            if self.peek() == Token::StreamKeyword {
+            if self.peek() == PdfToken::StreamKeyword {
                 return Value::ByteStream(Box::new(result), self.eat_bytestream());
             } else {
                 return result;
             }
-        } else if self.peek() == Token::AngleStart {
+        } else if self.peek() == PdfToken::AngleStart {
             self.eat_next_token();
             let tok = self.eat_next_token();
             assert!(is_identifier(&tok));
             self.eat_next_token();
             return Value::Identifier(get_id(&tok));
-        } else if self.peek() == Token::LeftBracket {
+        } else if self.peek() == PdfToken::LeftBracket {
             let mut items = vec![];
             self.eat_next_token();
-            while self.peek() != Token::RightBracket {
-                assert!(self.peek() != Token::LeftBracket);
-                if self.peek() == Token::ForwardSlash {
+            while self.peek() != PdfToken::RightBracket {
+                assert!(self.peek() != PdfToken::LeftBracket);
+                if self.peek() == PdfToken::ForwardSlash {
                     self.eat_next_token();
                     let tok = &self.eat_next_token();
                     assert!(is_identifier(tok));
@@ -287,35 +287,35 @@ impl Parser<'_> {
                         continue;
                     }
                     let v2 = self.read_number();
-                    if self.peek() != Token::RefKeyword {
+                    if self.peek() != PdfToken::RefKeyword {
                         items.push(Value::Number(v1));
                         items.push(Value::Number(v2));
                         continue;
                     }
-                    assert!(self.eat_next_token() == Token::RefKeyword);
+                    assert!(self.eat_next_token() == PdfToken::RefKeyword);
                     items.push(Value::Reference { id: v1, gxn: v2 });
                 } else {
                     items.push(self.eat_value());
                 }
             }
-            self.eat_expected(Token::RightBracket);
+            self.eat_expected(PdfToken::RightBracket);
             return Value::Vector(Box::new(items));
         } else if is_num(&self.peek()) {
             let vv = self.eat_next_token();
             if is_num(&self.peek()) {
                 let v2 = self.eat_next_token();
-                assert!(self.eat_next_token() == Token::RefKeyword);
+                assert!(self.eat_next_token() == PdfToken::RefKeyword);
                 return Value::Reference { id: get_num(&vv), gxn: get_num(&v2) }
             } else {
                 return Value::Number(get_num(&vv));
             }
-        } else if self.peek() == Token::LeftParens {
+        } else if self.peek() == PdfToken::LeftParens {
             self.eat_next_token();
             let tok = self.eat_next_token();
             assert!(is_string(&tok));
-            assert!(self.eat_next_token() == Token::RightParens);
+            assert!(self.eat_next_token() == PdfToken::RightParens);
             return Value::Identifier(get_str(&tok));
-        } else if self.peek() == Token::ForwardSlash {
+        } else if self.peek() == PdfToken::ForwardSlash {
             self.eat_next_token();
             let tok = self.eat_next_token();
             assert!(is_identifier(&tok));

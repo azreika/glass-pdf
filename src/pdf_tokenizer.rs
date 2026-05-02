@@ -3,7 +3,7 @@ use crate::src_loc::SrcLoc;
 use std::fmt;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Token {
+pub enum PdfToken {
     Number(i32),
     Identifier(String),
     String(String),
@@ -33,35 +33,35 @@ pub enum Token {
     EOFKeyword,
 }
 
-impl fmt::Display for Token {
+impl fmt::Display for PdfToken {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut kw = |x| { return write!(f, "{}", x) };
         match self {
-            Token::Number(v) => write!(f, "{}", v),
-            Token::Identifier(str) => write!(f, "{}", str),
-            Token::String(str) => write!(f, "{}", str),
-            Token::ByteStream(_) => write!(f, "<bytes...>"),
+            PdfToken::Number(v) => write!(f, "{}", v),
+            PdfToken::Identifier(str) => write!(f, "{}", str),
+            PdfToken::String(str) => write!(f, "{}", str),
+            PdfToken::ByteStream(_) => write!(f, "<bytes...>"),
 
-            Token::AngleStart => kw("<"),
-            Token::AngleEnd => kw(">"),
-            Token::ForwardSlash => kw("/"),
-            Token::LeftBracket => kw("["),
-            Token::RightBracket => kw("]"),
-            Token::LeftParens => kw("("),
-            Token::RightParens => kw(")"),
-            Token::Percent => kw("%"),
+            PdfToken::AngleStart => kw("<"),
+            PdfToken::AngleEnd => kw(">"),
+            PdfToken::ForwardSlash => kw("/"),
+            PdfToken::LeftBracket => kw("["),
+            PdfToken::RightBracket => kw("]"),
+            PdfToken::LeftParens => kw("("),
+            PdfToken::RightParens => kw(")"),
+            PdfToken::Percent => kw("%"),
 
-            Token::ObjKeyword => kw("obj"),
-            Token::EndObjKeyword => kw("endobj"),
-            Token::StreamKeyword => kw("stream"),
-            Token::EndStreamKeyword => kw("endstream"),
-            Token::XRefKeyword => kw("xref"),
-            Token::StartXRefKeyword => kw("startxref"),
-            Token::TrailerKeyword => kw("trailer"),
-            Token::RefKeyword => kw("R"),
-            Token::FKeyword => kw("f"),
-            Token::NKeyword => kw("n"),
-            Token::EOFKeyword => kw("EOF"),
+            PdfToken::ObjKeyword => kw("obj"),
+            PdfToken::EndObjKeyword => kw("endobj"),
+            PdfToken::StreamKeyword => kw("stream"),
+            PdfToken::EndStreamKeyword => kw("endstream"),
+            PdfToken::XRefKeyword => kw("xref"),
+            PdfToken::StartXRefKeyword => kw("startxref"),
+            PdfToken::TrailerKeyword => kw("trailer"),
+            PdfToken::RefKeyword => kw("R"),
+            PdfToken::FKeyword => kw("f"),
+            PdfToken::NKeyword => kw("n"),
+            PdfToken::EOFKeyword => kw("EOF"),
         }
     }
 }
@@ -70,26 +70,26 @@ impl fmt::Display for Token {
 struct PdfTokenizer {
     data: Vec<u8>,
     offset: usize,
-    tokens: Vec<(SrcLoc, Token)>,
+    tokens: Vec<(SrcLoc, PdfToken)>,
 }
 
-impl Tokenizer<Token> for PdfTokenizer {
-    fn token_from_word(&self, word: &str) -> Token {
+impl Tokenizer<PdfToken> for PdfTokenizer {
+    fn token_from_word(&self, word: &str) -> PdfToken {
         return match word {
-            "xref" => Token::XRefKeyword,
-            "trailer" => Token::TrailerKeyword,
-            "f" => Token::FKeyword,
-            "n" => Token::NKeyword,
-            "endobj" => Token::EndObjKeyword,
-            "R" => Token::RefKeyword,
-            "obj" => Token::ObjKeyword,
-            "startxref" => Token::StartXRefKeyword,
-            "stream" => Token::StreamKeyword,
+            "xref" => PdfToken::XRefKeyword,
+            "trailer" => PdfToken::TrailerKeyword,
+            "f" => PdfToken::FKeyword,
+            "n" => PdfToken::NKeyword,
+            "endobj" => PdfToken::EndObjKeyword,
+            "R" => PdfToken::RefKeyword,
+            "obj" => PdfToken::ObjKeyword,
+            "startxref" => PdfToken::StartXRefKeyword,
+            "stream" => PdfToken::StreamKeyword,
 
-            "[" => Token::LeftBracket,
-            "]" => Token::RightBracket,
-            ">" => Token::AngleEnd,
-            "/" => Token::ForwardSlash,
+            "[" => PdfToken::LeftBracket,
+            "]" => PdfToken::RightBracket,
+            ">" => PdfToken::AngleEnd,
+            "/" => PdfToken::ForwardSlash,
             _ => {
                 println!("FAILURE!!! {word} @ loc{{{}}}/{}", self.offset, self.data.len());
                 panic!();
@@ -107,7 +107,7 @@ impl Tokenizer<Token> for PdfTokenizer {
 }
 
 impl PdfTokenizer {
-    fn push_token(&mut self, loc: SrcLoc, tok: Token) {
+    fn push_token(&mut self, loc: SrcLoc, tok: PdfToken) {
         self.tokens.push((loc, tok));
     }
 
@@ -151,35 +151,35 @@ impl PdfTokenizer {
                 self.lex_char();
             } else if c.is_numeric() || c == '-' {
                 let num = self.lex_number();
-                self.push_token(loc, Token::Number(num));
+                self.push_token(loc, PdfToken::Number(num));
             } else if c == '%' {
                 self.eat_char('%');
                 if self.peek() == '%' {
                     self.eat_char('%');
                     let word = self.lex_word();
                     assert_eq!(word, "EOF");
-                    self.push_token(loc, Token::EOFKeyword);
+                    self.push_token(loc, PdfToken::EOFKeyword);
                     continue;
                 }
-                self.push_token(loc, Token::Percent);
+                self.push_token(loc, PdfToken::Percent);
                 let str = self.lex_until('\n');
                 self.eat_char('\n');
-                self.push_token(loc, Token::String(str));
+                self.push_token(loc, PdfToken::String(str));
             } else if c == '<' {
                 self.eat_char('<');
                 self.eat_whitespace();
-                self.push_token(loc, Token::AngleStart);
+                self.push_token(loc, PdfToken::AngleStart);
                 if !self.peek_is('<') {
                     let id_word = self.lex_word();
-                    let id = Token::Identifier(id_word);
+                    let id = PdfToken::Identifier(id_word);
                     self.push_token(loc, id);
                 } else {
                     self.eat_char('<');
-                    self.push_token(loc, Token::AngleStart);
+                    self.push_token(loc, PdfToken::AngleStart);
                 }
             } else if c == '(' {
                 self.eat_char('(');
-                self.push_token(loc, Token::LeftParens);
+                self.push_token(loc, PdfToken::LeftParens);
 
                 let mut chars = vec![];
                 // TODO: add depth params
@@ -187,19 +187,19 @@ impl PdfTokenizer {
                     chars.push(self.lex_char());
                 }
                 let str = chars.iter().collect();
-                self.push_token(loc, Token::String(str));
+                self.push_token(loc, PdfToken::String(str));
                 self.eat_char(')');
-                self.push_token(loc, Token::RightParens);
+                self.push_token(loc, PdfToken::RightParens);
             } else {
                 let word = self.lex_word();
                 let tok = self.token_from_word(&word);
                 self.push_token(loc, tok.clone());
 
-                if matches!(tok, Token::StreamKeyword) {
+                if matches!(tok, PdfToken::StreamKeyword) {
                     self.lex_stream_body(loc);
-                } else if matches!(tok, Token::ForwardSlash) {
+                } else if matches!(tok, PdfToken::ForwardSlash) {
                     let id_word = self.lex_word();
-                    self.push_token(loc, Token::Identifier(id_word));
+                    self.push_token(loc, PdfToken::Identifier(id_word));
                 }
             }
         }
@@ -222,15 +222,15 @@ impl PdfTokenizer {
         if end > start && self.data[end - 1] == b'\n' { end -= 1; }
         if end > start && self.data[end - 1] == b'\r' { end -= 1; }
 
-        self.push_token(loc, Token::ByteStream(self.data[start..end].to_vec()));
+        self.push_token(loc, PdfToken::ByteStream(self.data[start..end].to_vec()));
 
         // Consume "endstream"
         self.offset += "endstream".len();
-        self.push_token(loc, Token::EndStreamKeyword);
+        self.push_token(loc, PdfToken::EndStreamKeyword);
     }
 }
 
-pub fn tokenize_pdf(data: &Vec<u8>) -> Vec<(SrcLoc,Token)> {
+pub fn tokenize_pdf(data: &Vec<u8>) -> Vec<(SrcLoc,PdfToken)> {
     let mut tokenizer = PdfTokenizer::new(data.clone());
     tokenizer.run();
     return tokenizer.tokens;
