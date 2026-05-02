@@ -63,10 +63,6 @@ struct TextBlock {
     output: HashMap<i32, TextInfo>
 }
 
-fn get_topmost(output: &HashMap<i32, TextInfo>) -> f32 {
-    return *output.keys().max().unwrap() as f32;
-}
-
 impl <Message> canvas::Program<Message> for TextBlock {
     type State = ();
 
@@ -185,7 +181,6 @@ impl ContentTokenizer {
             _ => {
                 println!("missed word: `{}`", word);
                 panic!();
-                // println!("Got to {} out of {} ({}%)", self.offset, self.data.len(), (self.offset as f64 * 100.0 / self.data.len() as f64) );
             }
         }
     }
@@ -197,7 +192,6 @@ fn is_identifier_char(c: char) -> bool {
 
 fn tokenize_stream(str: String) -> Vec<ContentToken> {
     let mut vv = vec![];
-    println!("{}", str);
 
     let mut tokenizer = ContentTokenizer { data: str.chars().collect(), offset: 0, missed_words: 0 };
     while tokenizer.offset < tokenizer.data.len() {
@@ -460,7 +454,6 @@ impl Parser {
         let x_scale = self.text_state.matrix[0] as f32;
         let init_size = self.curr_size();
         let size = init_size * x_scale;
-        println!("{:?}", self.text_state.matrix);
         let entry = self.output.entry(self.y()).or_insert(TextInfo {
             txt: String::new(),
             size: size,
