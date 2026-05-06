@@ -12,7 +12,7 @@ use crate::ast::FontLib;
 
 pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
     let mut parser = Parser::new(font_lib.clone(), tokens.clone());
-    parser.parse_program();
+    parser.view_program();
 }
 
 struct Parser {
@@ -69,7 +69,6 @@ impl Viewer {
                 foo.txt += &str;
             }
         }
-
     }
 
     fn view(&self) -> Element<'_, Message> {
@@ -89,7 +88,7 @@ struct FakeObj {
 }
 
 impl FakeObj {
-    fn fake_stream(self) -> impl iced::futures::Stream<Item=Message> {
+    fn program_stream(self) -> impl iced::futures::Stream<Item=Message> {
         return stream::unfold(self, |mut parser| async move {
             if parser.value >= 10 {
                 return None;
@@ -106,7 +105,7 @@ impl Parser {
         self.text_state = TextState::new();
     }
 
-    fn parse_program(&mut self) {
+    fn parse_program(&mut self) -> HashMap<i32, TextInfo> {
         while self.offset < self.tokens.len() {
             let tok = &self.tokens[self.offset];
             if matches!(tok, ContentToken::BTKeyword) {
@@ -119,11 +118,15 @@ impl Parser {
         text_vec.sort_by(|a,b| a.0.cmp(b.0));
         text_vec.reverse();
 
-        let output = self.output.clone();
+        return self.output.clone();
+    }
+
+    fn view_program(&mut self) {
+        let output = self.parse_program();
         iced::application(
             move || {
-                let fake_obj = FakeObj {value: 0};
-                let stream = fake_obj.fake_stream();
+                let fake_obj = FakeObj { value: 0 };
+                let stream = fake_obj.program_stream();
                 let task = Task::stream(stream);
                 (Viewer { output: output.clone() }, task)
             },
