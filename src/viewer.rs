@@ -2,7 +2,7 @@ use crate::content_tokenizer::ContentToken;
 
 use std::collections::HashMap;
 
-use iced::futures::{Stream, stream};
+use iced::futures::stream;
 use iced::{Color, Element, Task};
 use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
@@ -11,8 +11,18 @@ use iced::{Length, Point, Renderer, Theme};
 use crate::ast::FontLib;
 
 pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
-    let mut parser = Parser::new(font_lib.clone(), tokens.clone());
-    parser.view_program();
+    let flib = font_lib.clone();
+    let toks = tokens.clone();
+    iced::application(
+            move || {
+                let parser = Parser::new(flib.clone(), toks.clone());
+                let stream = parser.into_program_stream();
+                let task = Task::stream(stream);
+                (Viewer::default(), task)
+            },
+            Viewer::update,
+            Viewer::view
+        ).run().unwrap();
 }
 
 struct Parser {
@@ -21,6 +31,7 @@ struct Parser {
     text_state: TextState,
     font_lib: FontLib,
     stack: Vec<Value>,
+    state: State,
 }
 
 impl Parser {
@@ -31,6 +42,7 @@ impl Parser {
             text_state: TextState::new(),
             font_lib,
             stack: vec![],
+            state: State::TopLevel,
         };
     }
 
@@ -43,11 +55,17 @@ enum Value {
     Array (Vec<Box<Value>>),
 }
 
+#[derive(Copy, Clone)]
+enum State {
+    TopLevel,
+    InText,
+}
+
 struct Viewer {
     output: HashMap<i32, TextInfo>
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Message {
     DrawText { x_pos: i32, y_pos: i32, str: String, size: f32 },
     DrawBlock(Vec<Message>),
@@ -92,69 +110,52 @@ impl Viewer {
     }
 }
 
-struct FakeObj {
-    pos: usize,
-    value: Vec<Message>,
-}
-
-impl FakeObj {
-    fn program_stream(self) -> impl iced::futures::Stream<Item=Message> {
-        return stream::unfold(self, |mut parser| async move {
-            if parser.pos >= parser.value.len() {
-                return None;
-            }
-            let message = parser.value[parser.pos].clone();
-            parser.pos += 1;
-            return Some((message, parser));
-        });
-    }
-}
-
-
 impl Parser {
     fn reset_text_state(&mut self) {
         self.text_state = TextState::new();
     }
 
-    fn parse_program(&mut self) -> Vec<Message> {
-        let mut messages = vec![];
-        while self.offset < self.tokens.len() {
-            let tok = &self.tokens[self.offset];
-            if matches!(tok, ContentToken::BTKeyword) {
-                assert!(matches!(self.next_token(), ContentToken::BTKeyword));
-                assert!(self.stack.is_empty());
-                while !matches!(self.peek(), ContentToken::ETKeyword) {
-                    if self.is_operator(&self.peek()) {
-                        let tok = self.next_token();
-                        let msg = self.process_op(&tok);
-                        messages.push(msg);
-                        continue;
-                    }
-                    let value = self.parse_value();
-                    self.stack.push(value);
-                }
-                self.next_token();
-
-                assert!(self.stack.is_empty());
-                self.reset_text_state();
+    fn into_program_stream(self) -> impl iced::futures::Stream<Item=Message> {
+        return stream::unfold(self, |mut parser| async move {
+            if parser.offset >= parser.tokens.len() {
+                return None;
             }
-            self.offset += 1;
-        }
-        return messages;
-    }
 
-    fn view_program(&mut self) {
-        let messages = self.parse_program();
-        iced::application(
-            move || {
-                let fake_obj = FakeObj { pos: 0, value: messages.clone() };
-                let stream = fake_obj.program_stream();
-                let task = Task::stream(stream);
-                (Viewer { output: HashMap::new() }, task)
-            },
-            Viewer::update,
-            Viewer::view
-        ).run().unwrap();
+            match parser.state {
+                State::TopLevel => {
+                    let tok = &parser.tokens[parser.offset];
+                    if !matches!(tok, ContentToken::BTKeyword) {
+                        parser.offset += 1;
+                        return Some((Message::Noop, parser));
+                    }
+                    assert!(matches!(parser.next_token(), ContentToken::BTKeyword));
+                    assert!(parser.stack.is_empty());
+                    parser.state = State::InText;
+                    return Some((Message::Noop, parser));
+                },
+                State::InText => {
+                    match parser.peek() {
+                        ContentToken::ETKeyword => {
+                            parser.next_token();
+                            assert!(parser.stack.is_empty());
+                            parser.reset_text_state();
+                            parser.state = State::TopLevel;
+                            return Some((Message::Noop, parser));
+                        },
+                        _ => {
+                            if parser.is_operator(&parser.peek()) {
+                                let tok = parser.next_token();
+                                let msg = parser.process_op(&tok);
+                                return Some((msg, parser));
+                            }
+                            let value = parser.parse_value();
+                            parser.stack.push(value);
+                            return Some((Message::Noop, parser));
+                        },
+                    }
+                },
+            }
+        });
     }
 
     fn next_token(&mut self) -> ContentToken {
