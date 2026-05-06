@@ -20,6 +20,7 @@ struct Parser {
     offset: usize,
     text_state: TextState,
     font_lib: FontLib,
+    stack: Vec<Value>,
 }
 
 impl Parser {
@@ -29,6 +30,7 @@ impl Parser {
             offset: 0,
             text_state: TextState::new(),
             font_lib,
+            stack: vec![],
         };
     }
 
@@ -120,20 +122,20 @@ impl Parser {
             let tok = &self.tokens[self.offset];
             if matches!(tok, ContentToken::BTKeyword) {
                 assert!(matches!(self.next_token(), ContentToken::BTKeyword));
-                let mut stack = vec![];
-
+                assert!(self.stack.is_empty());
                 while !matches!(self.peek(), ContentToken::ETKeyword) {
                     if self.is_operator(&self.peek()) {
                         let tok = self.next_token();
-                        let msg = self.process_op(&mut stack, &tok);
+                        let msg = self.process_op(&tok);
                         messages.push(msg);
                         continue;
                     }
-                    stack.push(self.parse_value());
+                    let value = self.parse_value();
+                    self.stack.push(value);
                 }
                 self.next_token();
 
-                assert!(stack.is_empty());
+                assert!(self.stack.is_empty());
                 self.reset_text_state();
             }
             self.offset += 1;
@@ -220,7 +222,8 @@ impl Parser {
         };
     }
 
-    fn process_op(&mut self, stack: &mut Vec<Value>, tok: &ContentToken) -> Message {
+    fn process_op(&mut self, tok: &ContentToken) -> Message {
+        let stack = &mut self.stack;
         match tok {
             ContentToken::TmKeyword => {
                 let mut mat = vec![];
