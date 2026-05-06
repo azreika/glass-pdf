@@ -19,3 +19,23 @@ pub enum State {
     TopLevel,
     InText,
 }
+
+pub struct GraphicsState {
+    pub ctm: Vec<f64>,
+}
+
+impl GraphicsState {
+    fn init_matrix() -> Vec<f64> {
+        return vec![
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0
+        ];
+    }
+
+    pub fn new() -> Self {
+        return GraphicsState {
+            ctm: Self::init_matrix(),
+        };
+    }
+}

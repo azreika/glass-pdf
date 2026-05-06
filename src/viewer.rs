@@ -17,7 +17,7 @@ pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
             move || {
                 let stream = ContentStreamer::stream_content(flib.clone(), toks.clone());
                 let task = Task::stream(stream);
-                (Viewer { output: HashMap::new(), glyphs: vec![] }, task)
+                (Viewer { output: HashMap::new(), glyphs: vec![]}, task)
             },
             Viewer::update,
             Viewer::view

@@ -19,6 +19,53 @@ enum Value {
     Array (Vec<Box<Value>>),
 }
 
+#[derive(Clone,Debug)]
+struct GraphicsState {
+    ctm: Vec<f64>,
+}
+
+fn multiply_3d(v1: &Vec<f64>, v2: &Vec<f64>) -> Vec<f64> {
+    let mut result = vec![0.0; 9];
+    assert_eq!(v1.len(), 9);
+    assert_eq!(v2.len(), 9);
+
+    for row in 0..3 {
+        for col in 0..3 {
+            for k in 0..3 {
+                result[row*3 + col] += v1[row*3 + k] * v2[k*3 + col];
+            }
+        }
+    }
+    return result;
+}
+
+fn matrix_to_3d(v: &Vec<f64>) -> Vec<f64> {
+    assert_eq!(v.len(), 6);
+    let result = vec![
+        v[0], v[1], 0.0,
+        v[2], v[3], 0.0,
+        v[4], v[5], 1.0,
+    ];
+    return result;
+}
+
+impl GraphicsState {
+    fn init_matrix() -> Vec<f64> {
+        return vec![
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0
+        ];
+    }
+
+    fn new() -> Self {
+        return GraphicsState {
+            ctm: Self::init_matrix(),
+        };
+    }
+
+}
+
 impl TextState {
     fn init_matrix() -> Vec<f64> {
         return vec![
@@ -51,24 +98,6 @@ impl TextState {
         self.matrix = expected_matrix.clone();
         self.line_matrix = expected_matrix.clone();
     }
-
-    fn multiply(&mut self, v: &Vec<f64>) {
-        let v3d = Self::matrix_to_3d(v);
-        let mut result = vec![0.0; 9];
-
-        assert_eq!(self.matrix.len(), 9);
-        assert_eq!(v3d.len(), 9);
-
-        for row in 0..3 {
-            for col in 0..3 {
-                for k in 0..3 {
-                    result[row*3 + col] += self.matrix[row*3 + k] * v3d[k*3 + col];
-                }
-            }
-        }
-
-        self.matrix = result;
-    }
 }
 
 pub struct ContentStreamer {
@@ -78,6 +107,8 @@ pub struct ContentStreamer {
     font_lib: FontLib,
     stack: Vec<Value>,
     state: State,
+    graphics_state_stack: Vec<GraphicsState>,
+    graphics_state: GraphicsState,
 }
 
 
@@ -90,6 +121,8 @@ impl ContentStreamer {
             font_lib,
             stack: vec![],
             state: State::TopLevel,
+            graphics_state_stack: vec![],
+            graphics_state: GraphicsState::new(),
         };
     }
 
@@ -196,17 +229,16 @@ impl ContentStreamer {
             matches!(tok, ContentToken::IKeyword) ||
             matches!(tok, ContentToken::CmStroke)
             ;
-
     }
 
     fn process_main_op(&mut self, tok: &ContentToken) -> Message {
         match tok {
             ContentToken::SaveGraphicsState => {
-                println!("TODO: implement graphics state save");
+                self.graphics_state_stack.push(self.graphics_state.clone());
                 return Message::Noop;
             },
             ContentToken::RestoreGraphicsState => {
-                println!("TODO: implement graphics state restore");
+                self.graphics_state = self.graphics_state_stack.pop().unwrap();
                 return Message::Noop;
             },
             ContentToken::RectKeyword => {
@@ -253,19 +285,24 @@ impl ContentStreamer {
                 }
                 mat.reverse();
 
-                self.text_state.multiply(&mat);
+                let mat = matrix_to_3d(&mat);
+                let result = multiply_3d(self.curr_ctm(), &mat);
+                self.graphics_state.ctm = result;
                 return Message::Noop;
             }
             _ => panic!(),
         }
     }
 
+    fn curr_ctm(&self) -> &Vec<f64> {
+        return &self.graphics_state_stack.last().unwrap().ctm;
+    }
 
-    fn y(&self) -> f64 {
+    fn text_y(&self) -> f64 {
         return self.text_state.matrix[7];
     }
 
-    fn x(&self) -> f64 {
+    fn text_x(&self) -> f64 {
         return self.text_state.matrix[6];
     }
 
@@ -314,17 +351,21 @@ impl ContentStreamer {
 
     fn mk_message(&mut self, str: &str) -> Message {
         let x_scale = self.text_state.matrix[0] as f32;
+        let y_scale = self.text_state.matrix[4] as f64;
         let init_size = self.curr_size();
         let size = init_size * x_scale;
-        let x_pos = self.x();
-        let y_pos = self.y();
+        let x_pos = self.text_x();
+        let y_pos = self.text_y();
 
         let mut messages = vec![];
         let mut curr_x = x_pos;
         for s in str.chars().into_iter() {
+            let ctm = self.curr_ctm();
+            let screen_x = ctm[0] * curr_x + ctm[3] * y_pos + ctm[6];
+            let screen_y = ctm[1] * curr_x + ctm[4] * y_pos + ctm[7];
             messages.push(Message::DrawGlyph(GlyphInfo{
-                x: curr_x as i32,
-                y: y_pos as i32,
+                x: screen_x as i32,
+                y: screen_y as i32,
                 str: s.to_string(),
                 size: size,
             }));
