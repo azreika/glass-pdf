@@ -94,7 +94,7 @@ impl Viewer {
                     self.update(message.clone());
                 }
             },
-            Message::Noop => {},
+            Message::Noop => panic!("Noops should have been filtered out"),
         }
     }
 
@@ -117,45 +117,53 @@ impl Parser {
 
     fn into_program_stream(self) -> impl iced::futures::Stream<Item=Message> {
         return stream::unfold(self, |mut parser| async move {
-            if parser.offset >= parser.tokens.len() {
-                return None;
-            }
-
-            match parser.state {
-                State::TopLevel => {
-                    let tok = &parser.tokens[parser.offset];
-                    if !matches!(tok, ContentToken::BTKeyword) {
-                        parser.offset += 1;
-                        return Some((Message::Noop, parser));
-                    }
-                    assert!(matches!(parser.next_token(), ContentToken::BTKeyword));
-                    assert!(parser.stack.is_empty());
-                    parser.state = State::InText;
-                    return Some((Message::Noop, parser));
-                },
-                State::InText => {
-                    match parser.peek() {
-                        ContentToken::ETKeyword => {
-                            parser.next_token();
-                            assert!(parser.stack.is_empty());
-                            parser.reset_text_state();
-                            parser.state = State::TopLevel;
-                            return Some((Message::Noop, parser));
-                        },
-                        _ => {
-                            if parser.is_operator(&parser.peek()) {
-                                let tok = parser.next_token();
-                                let msg = parser.process_op(&tok);
-                                return Some((msg, parser));
-                            }
-                            let value = parser.parse_value();
-                            parser.stack.push(value);
-                            return Some((Message::Noop, parser));
-                        },
-                    }
-                },
+            loop {
+                if parser.offset >= parser.tokens.len() {
+                    return None;
+                }
+                let msg = parser.advance();
+                // Skip noops to avoid redundant drawings
+                if !matches!(msg, Message::Noop) {
+                    return Some((msg, parser));
+                }
             }
         });
+    }
+
+    fn advance(&mut self) -> Message {
+        match self.state {
+            State::TopLevel => {
+                if !matches!(self.peek(), ContentToken::BTKeyword) {
+                    self.offset += 1;
+                    return Message::Noop;
+                }
+                assert!(matches!(self.next_token(), ContentToken::BTKeyword));
+                assert!(self.stack.is_empty());
+                self.state = State::InText;
+                return Message::Noop;
+            },
+            State::InText => {
+                match self.peek() {
+                    ContentToken::ETKeyword => {
+                        self.next_token();
+                        assert!(self.stack.is_empty());
+                        self.reset_text_state();
+                        self.state = State::TopLevel;
+                        return Message::Noop;
+                    },
+                    _ => {
+                        if self.is_operator(&self.peek()) {
+                            let tok = self.next_token();
+                            let msg = self.process_op(&tok);
+                            return msg;
+                        }
+                        let value = self.parse_value();
+                        self.stack.push(value);
+                        return Message::Noop;
+                    },
+                }
+            },
+        }
     }
 
     fn next_token(&mut self) -> ContentToken {
@@ -223,6 +231,11 @@ impl Parser {
         };
     }
 
+    fn mk_message_block(&mut self, msgs: Vec<Message>) -> Message {
+        let msgs = msgs.into_iter().filter(|c| !matches!(c, Message::Noop)).collect();
+        return Message::DrawBlock(msgs);
+    }
+
     fn process_op(&mut self, tok: &ContentToken) -> Message {
         let stack = &mut self.stack;
         match tok {
@@ -259,7 +272,7 @@ impl Parser {
                     };
                     msgs.push(msg);
                 }
-                return Message::DrawBlock(msgs);
+                return self.mk_message_block(msgs);
             }
             _ => panic!("Unexpected operator {:?}", tok),
         }
