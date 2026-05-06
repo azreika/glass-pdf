@@ -295,11 +295,7 @@ impl ContentStreamer {
     }
 
     fn curr_ctm(&self) -> &Vec<f64> {
-        return &self.graphics_state_stack.last().unwrap().ctm;
-    }
-
-    fn text_y(&self) -> f64 {
-        return self.text_state.matrix[7];
+        return &self.graphics_state.ctm;
     }
 
     fn text_x(&self) -> f64 {

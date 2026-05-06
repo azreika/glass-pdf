@@ -91,6 +91,8 @@ impl <Message> canvas::Program<Message> for Page {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
 
+        let page_width = 612.0;
+        let page_height = 792.0;
         let mut geom: Vec<Geometry> = vec![];
 
         // outer rectangle
@@ -102,8 +104,8 @@ impl <Message> canvas::Program<Message> for Page {
         // inner rectangle
         let mut f2 = Frame::new(renderer, bounds.size());
         let inner_size = iced::Size {
-            width: bounds.size().width - self.padding_x*2.0,
-            height: bounds.size().height - self.padding_y*2.0,
+            width: page_width,
+            height: page_height,
         };
 
         let inner_rect = canvas::Path::rectangle(Point { x: self.padding_x, y: self.padding_y}, inner_size);
