@@ -52,6 +52,8 @@ struct Viewer {
 #[derive(Clone)]
 enum Message {
     DrawText { x_pos: i32, y_pos: i32, str: String, size: f32 },
+    DrawBlock(Vec<Message>),
+    Noop,
 }
 
 impl Default for Viewer {
@@ -70,7 +72,13 @@ impl Viewer {
                     size: size,
                 });
                 foo.txt += &str;
-            }
+            },
+            Message::DrawBlock(messages) =>  {
+                for message in messages.iter() {
+                    self.update(message.clone());
+                }
+            },
+            Message::Noop => {},
         }
     }
 
@@ -192,16 +200,21 @@ impl Parser {
         };
     }
 
-    fn add_output(&mut self, str: &str) {
+    fn mk_message(&mut self, str: &str) -> Message {
         let x_scale = self.text_state.matrix[0] as f32;
         let init_size = self.curr_size();
         let size = init_size * x_scale;
         let x_pos = self.x();
         let y_pos = self.y();
-        self.messages.push(Message::DrawText { x_pos, y_pos: y_pos, str: str.to_string(), size });
+        return Message::DrawText {
+            x_pos,
+            y_pos,
+            str: str.to_string(),
+            size
+        };
     }
 
-    fn process_op(&mut self, stack: &mut Vec<Value>, tok: &ContentToken) {
+    fn process_op(&mut self, stack: &mut Vec<Value>, tok: &ContentToken) -> Message {
         match tok {
             ContentToken::TmKeyword => {
                 let mut mat = vec![];
@@ -210,28 +223,33 @@ impl Parser {
                 }
                 mat.reverse();
                 self.text_state.set_matrices(&mat);
+                return Message::Noop;
             },
             ContentToken::TfKeyword => {
                 let size = Self::pop_number(stack);
                 let font = Self::pop_string(stack);
                 self.text_state.font = Some(font);
                 self.text_state.size = Some(size);
+                return Message::Noop;
             },
             ContentToken::TjKeyword => {
                 // show one
                 let str = Self::pop_string(stack);
-                self.add_output(&str);
+                return self.mk_message(&str);
             },
             ContentToken::TJKeyword => {
                 // show one or mroe
                 let arr = Self::pop_array(stack);
+                let mut msgs = vec![];
                 for val in arr {
-                    match *val {
-                        Value::Number(_) => {},
-                        Value::Identifier(id) => self.add_output(&id.to_string()),
+                    let msg = match *val {
+                        Value::Number(_) => Message::Noop,
+                        Value::Identifier(id) => self.mk_message(&id.to_string()),
                         other => panic!("unexpected array value {:?}", other),
-                    }
+                    };
+                    msgs.push(msg);
                 }
+                return Message::DrawBlock(msgs);
             }
             _ => panic!("Unexpected operator {:?}", tok),
         }
@@ -277,7 +295,8 @@ impl Parser {
         while !matches!(self.peek(), ContentToken::ETKeyword) {
             if self.is_operator(&self.peek()) {
                 let tok = self.next_token();
-                self.process_op(&mut stack, &tok);
+                let msg = self.process_op(&mut stack, &tok);
+                self.messages.push(msg);
                 continue;
             }
             stack.push(self.parse_value());
