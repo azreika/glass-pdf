@@ -10,7 +10,7 @@ use iced::{Length, Point, Renderer, Theme};
 use crate::ast::FontLib;
 
 pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
-    let mut parser = Parser { tokens: tokens.clone(), offset: 0, output: HashMap::new(), text_state: TextState::new(), font_lib: font_lib.clone() };
+    let mut parser = Parser::new(font_lib.clone(), tokens.clone());
     parser.parse_program();
 }
 
@@ -20,6 +20,19 @@ struct Parser {
     output: HashMap<i32, TextInfo>,
     text_state: TextState,
     font_lib: FontLib,
+}
+
+impl Parser {
+    fn new(font_lib: FontLib, tokens: Vec<ContentToken>) -> Self {
+        return Parser {
+            tokens,
+            offset: 0,
+            output: HashMap::new(),
+            text_state: TextState::new(),
+            font_lib,
+        };
+    }
+
 }
 
 #[derive(Debug, Clone)]
