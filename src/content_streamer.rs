@@ -350,28 +350,25 @@ impl ContentStreamer {
     }
 
     fn mk_message(&mut self, str: &str) -> Message {
-        let x_scale = self.text_state.matrix[0] as f32;
-        let y_scale = self.text_state.matrix[4] as f64;
-        let init_size = self.curr_size();
-        let size = init_size * x_scale;
-        let x_pos = self.text_x();
-        let y_pos = self.text_y();
+        let text_x_scale = self.text_state.matrix[0] as f32;
 
         let mut messages = vec![];
-        let mut curr_x = x_pos;
         for s in str.chars().into_iter() {
             let ctm = self.curr_ctm();
-            let screen_x = ctm[0] * curr_x + ctm[3] * y_pos + ctm[6];
-            let screen_y = ctm[1] * curr_x + ctm[4] * y_pos + ctm[7];
+            let effective = multiply_3d(&self.text_state.matrix, ctm);
+            let screen_x = effective[6];
+            let screen_y = effective[7];
+
+            let size = self.curr_size() * effective[4].abs() as f32;
             messages.push(Message::DrawGlyph(GlyphInfo{
                 x: screen_x as i32,
                 y: screen_y as i32,
                 str: s.to_string(),
                 size: size,
             }));
-            curr_x += self.char_width(s) as f64 * x_scale as f64;
+            let new_x = self.text_x() + self.char_width(s) as f64 * text_x_scale as f64;
+            self.set_x(new_x);
         }
-        self.set_x(curr_x);
         return self.mk_message_block(messages);
     }
 
