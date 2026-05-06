@@ -1,22 +1,21 @@
-use crate::content_tokenizer::ContentToken;
-
 use std::collections::HashMap;
 
-use iced::futures::stream;
 use iced::{Color, Element, Task};
 use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
 
+use crate::content_tokenizer::ContentToken;
+use crate::content_streamer::ContentStreamer;
 use crate::ast::FontLib;
+use crate::viewer_message::Message;
 
 pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
     let flib = font_lib.clone();
     let toks = tokens.clone();
     iced::application(
             move || {
-                let parser = Parser::new(flib.clone(), toks.clone());
-                let stream = parser.into_program_stream();
+                let stream = ContentStreamer::stream_content(flib.clone(), toks.clone());
                 let task = Task::stream(stream);
                 (Viewer::default(), task)
             },
@@ -25,51 +24,8 @@ pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
         ).run().unwrap();
 }
 
-struct Parser {
-    tokens: Vec<ContentToken>,
-    offset: usize,
-    text_state: TextState,
-    font_lib: FontLib,
-    stack: Vec<Value>,
-    state: State,
-}
-
-impl Parser {
-    fn new(font_lib: FontLib, tokens: Vec<ContentToken>) -> Self {
-        return Parser {
-            tokens,
-            offset: 0,
-            text_state: TextState::new(),
-            font_lib,
-            stack: vec![],
-            state: State::TopLevel,
-        };
-    }
-
-}
-
-#[derive(Debug, Clone)]
-enum Value {
-    Number(f64),
-    Identifier(String),
-    Array (Vec<Box<Value>>),
-}
-
-#[derive(Copy, Clone)]
-enum State {
-    TopLevel,
-    InText,
-}
-
 struct Viewer {
     output: HashMap<i32, TextInfo>
-}
-
-#[derive(Clone, Debug)]
-enum Message {
-    DrawText { x_pos: i32, y_pos: i32, str: String, size: f32 },
-    DrawBlock(Vec<Message>),
-    Noop,
 }
 
 impl Default for Viewer {
@@ -109,213 +65,6 @@ impl Viewer {
             .into();
     }
 }
-
-impl Parser {
-    fn reset_text_state(&mut self) {
-        self.text_state = TextState::new();
-    }
-
-    fn into_program_stream(self) -> impl iced::futures::Stream<Item=Message> {
-        return stream::unfold(self, |mut parser| async move {
-            loop {
-                if parser.offset >= parser.tokens.len() {
-                    return None;
-                }
-                let msg = parser.advance();
-                // Skip noops to avoid redundant drawings
-                if !matches!(msg, Message::Noop) {
-                    return Some((msg, parser));
-                }
-            }
-        });
-    }
-
-    fn advance(&mut self) -> Message {
-        match self.state {
-            State::TopLevel => {
-                // Keep going until we need to start processing text
-                if !matches!(self.peek(), ContentToken::BTKeyword) {
-                    self.offset += 1;
-                    return Message::Noop;
-                }
-                assert!(matches!(self.next_token(), ContentToken::BTKeyword));
-                assert!(self.stack.is_empty());
-                self.state = State::InText;
-                return Message::Noop;
-            },
-            State::InText => {
-                match self.peek() {
-                    // End Text, go back to Top Level
-                    ContentToken::ETKeyword => {
-                        self.next_token();
-                        assert!(self.stack.is_empty());
-                        self.reset_text_state();
-                        self.state = State::TopLevel;
-                        return Message::Noop;
-                    },
-
-                    // Keep processing text
-                    _ => {
-                        if self.is_operator(&self.peek()) {
-                            let tok = self.next_token();
-                            let msg = self.process_op(&tok);
-                            return msg;
-                        }
-                        let value = self.parse_value();
-                        self.stack.push(value);
-                        return Message::Noop;
-                    },
-                }
-            },
-        }
-    }
-
-    fn next_token(&mut self) -> ContentToken {
-        let tok = self.peek();
-        self.offset += 1;
-        return tok;
-    }
-
-    fn is_operator(&self, tok: &ContentToken) -> bool {
-        return
-            matches!(tok, ContentToken::TmKeyword) ||
-            matches!(tok, ContentToken::TfKeyword) ||
-            matches!(tok, ContentToken::TjKeyword) ||
-            matches!(tok, ContentToken::TJKeyword)
-    }
-
-    fn y(&self) -> i32 {
-        return self.text_state.matrix[7] as i32;
-    }
-
-    fn x(&self) -> i32 {
-        return self.text_state.matrix[6] as i32;
-    }
-
-    fn pop_number(stack: &mut Vec<Value>) -> f64 {
-        return match stack.pop().unwrap() {
-            Value::Number(v) => v,
-            other => panic!("expected number, got {:?}", other)
-        };
-    }
-
-    fn pop_string(stack: &mut Vec<Value>) -> String {
-        return match stack.pop().unwrap() {
-            Value::Identifier(v) => v,
-            other => panic!("expected number, got {:?}", other)
-        };
-    }
-
-    fn pop_array(stack: &mut Vec<Value>) -> Vec<Box<Value>> {
-        return match stack.pop().unwrap() {
-            Value::Array(arr) => arr,
-            other => panic!("expected number, got {:?}", other)
-        };
-    }
-
-    fn curr_size(&self) -> f32 {
-        let mm = self.text_state.size;
-        return match mm {
-            Some(vv) => vv as f32,
-            _ => 16.0,
-        };
-    }
-
-    fn mk_message(&mut self, str: &str) -> Message {
-        let x_scale = self.text_state.matrix[0] as f32;
-        let init_size = self.curr_size();
-        let size = init_size * x_scale;
-        let x_pos = self.x();
-        let y_pos = self.y();
-        return Message::DrawText {
-            x_pos,
-            y_pos,
-            str: str.to_string(),
-            size
-        };
-    }
-
-    fn mk_message_block(&mut self, msgs: Vec<Message>) -> Message {
-        let msgs = msgs.into_iter().filter(|c| !matches!(c, Message::Noop)).collect();
-        return Message::DrawBlock(msgs);
-    }
-
-    fn process_op(&mut self, tok: &ContentToken) -> Message {
-        let stack = &mut self.stack;
-        match tok {
-            ContentToken::TmKeyword => {
-                let mut mat = vec![];
-                for _ in 0..6 {
-                    mat.push(Self::pop_number(stack));
-                }
-                mat.reverse();
-                self.text_state.set_matrices(&mat);
-                return Message::Noop;
-            },
-            ContentToken::TfKeyword => {
-                let size = Self::pop_number(stack);
-                let font = Self::pop_string(stack);
-                self.text_state.font = Some(font);
-                self.text_state.size = Some(size);
-                return Message::Noop;
-            },
-            ContentToken::TjKeyword => {
-                // show one
-                let str = Self::pop_string(stack);
-                return self.mk_message(&str);
-            },
-            ContentToken::TJKeyword => {
-                // show one or mroe
-                let arr = Self::pop_array(stack);
-                let mut msgs = vec![];
-                for val in arr {
-                    let msg = match *val {
-                        Value::Number(_) => Message::Noop,
-                        Value::Identifier(id) => self.mk_message(&id.to_string()),
-                        other => panic!("unexpected array value {:?}", other),
-                    };
-                    msgs.push(msg);
-                }
-                return self.mk_message_block(msgs);
-            }
-            _ => panic!("Unexpected operator {:?}", tok),
-        }
-    }
-
-    fn parse_value(&mut self) -> Value {
-        let tok = self.next_token();
-        return match tok {
-            ContentToken::Identifier(id) => Value::Identifier(id.to_string()),
-            ContentToken::Number(x) => Value::Number(x),
-            ContentToken::LParens => self.parse_parens(),
-            ContentToken::LBracket => self.parse_array(),
-            _ => panic!("Unexpected token {:?}", tok),
-        }
-    }
-
-    fn peek(&self) -> ContentToken {
-        return self.tokens[self.offset].clone();
-    }
-
-    fn parse_parens(&mut self) -> Value {
-        let result = self.parse_value();
-        assert!(matches!(self.next_token(), ContentToken::RParens));
-        return result;
-    }
-
-    fn parse_array(&mut self) -> Value {
-        let mut arr = vec![];
-
-        while !matches!(self.peek(), ContentToken::RBracket) {
-            assert!(!matches!(self.peek(), ContentToken::LBracket));
-            let expr = self.parse_value();
-            arr.push(Box::new(expr));
-        }
-        self.next_token();
-        return Value::Array(arr);
-    }
-}
-
 
 #[derive(Clone, Debug)]
 struct TextInfo {
@@ -373,43 +122,5 @@ impl <Message> canvas::Program<Message> for Page {
         }
 
         return geom;
-    }
-}
-
-struct TextState {
-    matrix: Vec<f64>,
-    line_matrix: Vec<f64>,
-    font: Option<String>,
-    size: Option<f64>,
-}
-
-impl TextState {
-    fn init_matrix() -> Vec<f64> {
-        return vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
-    }
-
-    fn new() -> Self {
-        return TextState {
-            matrix: Self::init_matrix(),
-            line_matrix: Self::init_matrix(),
-            font: None,
-            size: None,
-        };
-    }
-
-    fn matrix_to_3d(v: &Vec<f64>) -> Vec<f64> {
-        assert_eq!(v.len(), 6);
-        let result = vec![
-            v[0], v[1], 0.0,
-            v[2], v[3], 0.0,
-            v[4], v[5], 1.0,
-        ];
-        return result;
-    }
-
-    fn set_matrices(&mut self, v: &Vec<f64>) {
-        let expected_matrix = Self::matrix_to_3d(v);
-        self.matrix = expected_matrix.clone();
-        self.line_matrix = expected_matrix.clone();
     }
 }

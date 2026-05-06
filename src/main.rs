@@ -6,6 +6,8 @@ mod ast;
 mod viewer;
 mod pdf_tokenizer;
 mod content_tokenizer;
+mod content_streamer;
+mod viewer_message;
 mod src_loc;
 
 use crate::pdf_tokenizer::{tokenize_pdf};
