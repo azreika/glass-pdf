@@ -1,4 +1,5 @@
 use iced::futures::stream;
+use iced::widget::text_editor::Content;
 use crate::content_tokenizer::ContentToken;
 use crate::ast::{Font, FontLib};
 
@@ -20,7 +21,10 @@ enum Value {
 
 impl TextState {
     fn init_matrix() -> Vec<f64> {
-        return vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+        return vec![
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0];
     }
 
     fn new() -> Self {
@@ -46,6 +50,24 @@ impl TextState {
         let expected_matrix = Self::matrix_to_3d(v);
         self.matrix = expected_matrix.clone();
         self.line_matrix = expected_matrix.clone();
+    }
+
+    fn multiply(&mut self, v: &Vec<f64>) {
+        let v3d = Self::matrix_to_3d(v);
+        let mut result = vec![0.0; 9];
+
+        assert_eq!(self.matrix.len(), 9);
+        assert_eq!(v3d.len(), 9);
+
+        for row in 0..3 {
+            for col in 0..3 {
+                for k in 0..3 {
+                    result[row*3 + col] += self.matrix[row*3 + k] * v3d[k*3 + col];
+                }
+            }
+        }
+
+        self.matrix = result;
     }
 }
 
@@ -95,14 +117,30 @@ impl ContentStreamer {
     fn advance(&mut self) -> Message {
         match self.state {
             State::TopLevel => {
-                // Keep going until we need to start processing text
-                if !matches!(self.peek(), ContentToken::BTKeyword) {
-                    self.offset += 1;
+                let tok = &self.peek();
+
+                if matches!(tok, ContentToken::BTKeyword) {
+                    self.next_token();
+                    self.state = State::InText;
                     return Message::Noop;
                 }
-                assert!(matches!(self.next_token(), ContentToken::BTKeyword));
-                assert!(self.stack.is_empty());
-                self.state = State::InText;
+
+                if self.is_main_operator(tok) {
+                    let tok = self.next_token();
+                    let msg = self.process_main_op(&tok);
+                    return msg;
+                }
+
+                let value = match tok {
+                    ContentToken::Number(x) => Value::Number(*x),
+                    ContentToken::Identifier(id) => Value::Identifier(id.to_string()),
+                    _ => {
+                        println!("STACK: {:?}", self.stack);
+                        panic!("Unhandled TopLevel: {:?}", self.peek())
+                    },
+                };
+                self.stack.push(value);
+                self.offset += 1;
                 return Message::Noop;
             },
             State::InText => {
@@ -110,7 +148,6 @@ impl ContentStreamer {
                     // End Text, go back to Top Level
                     ContentToken::ETKeyword => {
                         self.next_token();
-                        assert!(self.stack.is_empty());
                         self.reset_text_state();
                         self.state = State::TopLevel;
                         return Message::Noop;
@@ -143,8 +180,86 @@ impl ContentStreamer {
             matches!(tok, ContentToken::TmKeyword) ||
             matches!(tok, ContentToken::TfKeyword) ||
             matches!(tok, ContentToken::TjKeyword) ||
-            matches!(tok, ContentToken::TJKeyword)
+            matches!(tok, ContentToken::TJKeyword);
     }
+
+    fn is_main_operator(&self, tok: &ContentToken) -> bool {
+        return
+            matches!(tok, ContentToken::SaveGraphicsState) ||
+            matches!(tok, ContentToken::RestoreGraphicsState) ||
+            matches!(tok, ContentToken::RectKeyword) ||
+            matches!(tok, ContentToken::WKeyword) ||
+            matches!(tok, ContentToken::NKeyword) ||
+            matches!(tok, ContentToken::CsStroke) ||
+            matches!(tok, ContentToken::EndCsStroke) ||
+            matches!(tok, ContentToken::Fill) ||
+            matches!(tok, ContentToken::IKeyword) ||
+            matches!(tok, ContentToken::CmStroke)
+            ;
+
+    }
+
+    fn process_main_op(&mut self, tok: &ContentToken) -> Message {
+        match tok {
+            ContentToken::SaveGraphicsState => {
+                println!("TODO: implement graphics state save");
+                return Message::Noop;
+            },
+            ContentToken::RestoreGraphicsState => {
+                println!("TODO: implement graphics state restore");
+                return Message::Noop;
+            },
+            ContentToken::RectKeyword => {
+                let height = self.pop_number();
+                let width = self.pop_number();
+                let y = self.pop_number();
+                let x = self.pop_number();
+                println!("TODO: implement rectangle thing");
+                return Message::Noop;
+            },
+            ContentToken::WKeyword => {
+                // Clipping Path Operator
+                println!("TODO: implement clipping path operator W");
+                return Message::Noop;
+            },
+            ContentToken::NKeyword => {
+                // Clipping Path Operator - end path object without filling it
+                println!("TODO: implement clipping path operator N");
+                return Message::Noop;
+            },
+            ContentToken::CsStroke => {
+                let cs = self.pop_string();
+                println!("TODO: implement colour space operator cs");
+                return Message::Noop;
+            },
+            ContentToken::EndCsStroke => {
+                let sc = self.pop_number();
+                println!("TODO: implement colour space operator sc");
+                return Message::Noop;
+            },
+            ContentToken::Fill => {
+                println!("TODO: implement colour space operator fill");
+                return Message::Noop;
+            },
+            ContentToken::IKeyword => {
+                println!("TODO: implement colour space operator flatness I");
+                let flatness = self.pop_number();
+                return Message::Noop;
+            },
+            ContentToken::CmStroke => {
+                let mut mat = vec![];
+                for _ in 0..6 {
+                    mat.push(self.pop_number());
+                }
+                mat.reverse();
+
+                self.text_state.multiply(&mat);
+                return Message::Noop;
+            }
+            _ => panic!(),
+        }
+    }
+
 
     fn y(&self) -> f64 {
         return self.text_state.matrix[7];
@@ -154,22 +269,22 @@ impl ContentStreamer {
         return self.text_state.matrix[6];
     }
 
-    fn pop_number(stack: &mut Vec<Value>) -> f64 {
-        return match stack.pop().unwrap() {
+    fn pop_number(&mut self) -> f64 {
+        return match self.stack.pop().unwrap() {
             Value::Number(v) => v,
             other => panic!("expected number, got {:?}", other)
         };
     }
 
-    fn pop_string(stack: &mut Vec<Value>) -> String {
-        return match stack.pop().unwrap() {
+    fn pop_string(&mut self) -> String {
+        return match self.stack.pop().unwrap() {
             Value::Identifier(v) => v,
             other => panic!("expected number, got {:?}", other)
         };
     }
 
-    fn pop_array(stack: &mut Vec<Value>) -> Vec<Box<Value>> {
-        return match stack.pop().unwrap() {
+    fn pop_array(&mut self) -> Vec<Box<Value>> {
+        return match self.stack.pop().unwrap() {
             Value::Array(arr) => arr,
             other => panic!("expected number, got {:?}", other)
         };
@@ -225,32 +340,31 @@ impl ContentStreamer {
     }
 
     fn process_op(&mut self, tok: &ContentToken) -> Message {
-        let stack = &mut self.stack;
         match tok {
             ContentToken::TmKeyword => {
                 let mut mat = vec![];
                 for _ in 0..6 {
-                    mat.push(Self::pop_number(stack));
+                    mat.push(self.pop_number());
                 }
                 mat.reverse();
                 self.text_state.set_matrices(&mat);
                 return Message::Noop;
             },
             ContentToken::TfKeyword => {
-                let size = Self::pop_number(stack);
-                let font = Self::pop_string(stack);
+                let size = self.pop_number();
+                let font = self.pop_string();
                 self.text_state.font = Some(font);
                 self.text_state.size = Some(size);
                 return Message::Noop;
             },
             ContentToken::TjKeyword => {
                 // show one
-                let str = Self::pop_string(stack);
+                let str = self.pop_string();
                 return self.mk_message(&str);
             },
             ContentToken::TJKeyword => {
                 // show one or mroe
-                let arr = Self::pop_array(stack);
+                let arr = self.pop_array();
                 let mut msgs = vec![];
                 for val in arr {
                     let msg = match *val {
@@ -264,7 +378,7 @@ impl ContentStreamer {
                     msgs.push(msg);
                 }
                 return self.mk_message_block(msgs);
-            }
+            },
             _ => panic!("Unexpected operator {:?}", tok),
         }
     }
