@@ -18,7 +18,6 @@ pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
 struct Parser {
     tokens: Vec<ContentToken>,
     offset: usize,
-    output: HashMap<i32, TextInfo>,
     text_state: TextState,
     font_lib: FontLib,
 }
@@ -28,7 +27,6 @@ impl Parser {
         return Parser {
             tokens,
             offset: 0,
-            output: HashMap::new(),
             text_state: TextState::new(),
             font_lib,
         };
@@ -140,10 +138,6 @@ impl Parser {
             }
             self.offset += 1;
         }
-
-        let mut text_vec: Vec<(&i32, &TextInfo)> = self.output.iter().collect();
-        text_vec.sort_by(|a,b| a.0.cmp(b.0));
-        text_vec.reverse();
         return messages;
     }
 
