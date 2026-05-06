@@ -118,7 +118,7 @@ impl Parser {
         self.text_state = TextState::new();
     }
 
-    fn parse_program(&mut self) -> HashMap<i32, TextInfo> {
+    fn parse_program(&mut self) {
         while self.offset < self.tokens.len() {
             let tok = &self.tokens[self.offset];
             if matches!(tok, ContentToken::BTKeyword) {
@@ -130,19 +130,17 @@ impl Parser {
         let mut text_vec: Vec<(&i32, &TextInfo)> = self.output.iter().collect();
         text_vec.sort_by(|a,b| a.0.cmp(b.0));
         text_vec.reverse();
-
-        return self.output.clone();
     }
 
     fn view_program(&mut self) {
-        let output = self.parse_program();
+        self.parse_program();
         let messages = self.messages.clone();
         iced::application(
             move || {
                 let fake_obj = FakeObj { pos: 0, value: messages.clone() };
                 let stream = fake_obj.program_stream();
                 let task = Task::stream(stream);
-                (Viewer { output: output.clone() }, task)
+                (Viewer { output: HashMap::new() }, task)
             },
             Viewer::update,
             Viewer::view
