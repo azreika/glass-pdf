@@ -133,6 +133,7 @@ impl Parser {
     fn advance(&mut self) -> Message {
         match self.state {
             State::TopLevel => {
+                // Keep going until we need to start processing text
                 if !matches!(self.peek(), ContentToken::BTKeyword) {
                     self.offset += 1;
                     return Message::Noop;
@@ -144,6 +145,7 @@ impl Parser {
             },
             State::InText => {
                 match self.peek() {
+                    // End Text, go back to Top Level
                     ContentToken::ETKeyword => {
                         self.next_token();
                         assert!(self.stack.is_empty());
@@ -151,6 +153,8 @@ impl Parser {
                         self.state = State::TopLevel;
                         return Message::Noop;
                     },
+
+                    // Keep processing text
                     _ => {
                         if self.is_operator(&self.peek()) {
                             let tok = self.next_token();
