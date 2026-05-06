@@ -21,6 +21,7 @@ struct Parser {
     output: HashMap<i32, TextInfo>,
     text_state: TextState,
     font_lib: FontLib,
+    messages: Vec<Message>,
 }
 
 impl Parser {
@@ -31,6 +32,7 @@ impl Parser {
             output: HashMap::new(),
             text_state: TextState::new(),
             font_lib,
+            messages: vec![],
         };
     }
 
@@ -47,8 +49,9 @@ struct Viewer {
     output: HashMap<i32, TextInfo>
 }
 
+#[derive(Clone)]
 enum Message {
-    DrawText { str: String },
+    DrawText { x_pos: i32, y_pos: i32, str: String, size: f32 },
 }
 
 impl Default for Viewer {
@@ -60,11 +63,11 @@ impl Default for Viewer {
 impl Viewer {
     fn update(&mut self, message: Message) {
         match message {
-            Message::DrawText { str } => {
-                let foo = self.output.entry(0).or_insert(TextInfo {
-                    x: 10,
+            Message::DrawText { x_pos, y_pos, str, size } => {
+                let foo = self.output.entry(y_pos).or_insert(TextInfo {
+                    x: x_pos,
                     txt: String::new(),
-                    size: 10.0,
+                    size: size,
                 });
                 foo.txt += &str;
             }
@@ -84,17 +87,19 @@ impl Viewer {
 }
 
 struct FakeObj {
-    value: i32,
+    pos: usize,
+    value: Vec<Message>,
 }
 
 impl FakeObj {
     fn program_stream(self) -> impl iced::futures::Stream<Item=Message> {
         return stream::unfold(self, |mut parser| async move {
-            if parser.value >= 10 {
+            if parser.pos >= parser.value.len() {
                 return None;
             }
-            parser.value += 1;
-            return Some((Message::DrawText { str: "hello!".to_string() }, parser));
+            let message = parser.value[parser.pos].clone();
+            parser.pos += 1;
+            return Some((message, parser));
         });
     }
 }
@@ -123,9 +128,10 @@ impl Parser {
 
     fn view_program(&mut self) {
         let output = self.parse_program();
+        let messages = self.messages.clone();
         iced::application(
             move || {
-                let fake_obj = FakeObj { value: 0 };
+                let fake_obj = FakeObj { pos: 0, value: messages.clone() };
                 let stream = fake_obj.program_stream();
                 let task = Task::stream(stream);
                 (Viewer { output: output.clone() }, task)
@@ -191,12 +197,8 @@ impl Parser {
         let init_size = self.curr_size();
         let size = init_size * x_scale;
         let x_pos = self.x();
-        let entry = self.output.entry(self.y()).or_insert(TextInfo {
-            x: x_pos,
-            txt: String::new(),
-            size: size,
-        });
-        entry.txt += str;
+        let y_pos = self.y();
+        self.messages.push(Message::DrawText { x_pos, y_pos: y_pos, str: str.to_string(), size });
     }
 
     fn process_op(&mut self, stack: &mut Vec<Value>, tok: &ContentToken) {
