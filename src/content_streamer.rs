@@ -1,8 +1,8 @@
 use iced::futures::stream;
 use crate::content_tokenizer::ContentToken;
-use crate::ast::FontLib;
+use crate::ast::{Font, FontLib};
 
-use crate::viewer_message::{Message, State};
+use crate::viewer_message::{GlyphInfo, Message, State};
 
 struct TextState {
     matrix: Vec<f64>,
@@ -78,6 +78,7 @@ impl ContentStreamer {
     pub fn stream_content(flib: FontLib, toks: Vec<ContentToken>) -> impl iced::futures::Stream<Item=Message> {
         let p = Self::new(flib, toks);
         return stream::unfold(p, |mut parser| async move {
+            iced::futures::future::ready(()).await;
             loop {
                 if parser.offset >= parser.tokens.len() {
                     return None;
@@ -145,12 +146,12 @@ impl ContentStreamer {
             matches!(tok, ContentToken::TJKeyword)
     }
 
-    fn y(&self) -> i32 {
-        return self.text_state.matrix[7] as i32;
+    fn y(&self) -> f64 {
+        return self.text_state.matrix[7];
     }
 
-    fn x(&self) -> i32 {
-        return self.text_state.matrix[6] as i32;
+    fn x(&self) -> f64 {
+        return self.text_state.matrix[6];
     }
 
     fn pop_number(stack: &mut Vec<Value>) -> f64 {
@@ -182,18 +183,40 @@ impl ContentStreamer {
         };
     }
 
+    fn get_font(&self) -> &Font {
+        return match self.text_state.font {
+            None => panic!(),
+            Some(ref other) => self.font_lib.get_font(other.to_string()),
+        }
+    }
+
+    fn char_width(&self, c: char) -> f64 {
+        let font = self.get_font();
+        let width = font.get_width(c) as f64;
+        let size = self.text_state.size.unwrap();
+        return (width * size) / 1000.0;
+    }
+
     fn mk_message(&mut self, str: &str) -> Message {
         let x_scale = self.text_state.matrix[0] as f32;
         let init_size = self.curr_size();
         let size = init_size * x_scale;
         let x_pos = self.x();
         let y_pos = self.y();
-        return Message::DrawText {
-            x_pos,
-            y_pos,
-            str: str.to_string(),
-            size
-        };
+
+        let mut messages = vec![];
+        let mut curr_x = x_pos;
+        for s in str.chars().into_iter() {
+            messages.push(Message::DrawGlyph(GlyphInfo{
+                x: curr_x as i32,
+                y: y_pos as i32,
+                str: s.to_string(),
+                size: size,
+            }));
+            curr_x += self.char_width(s) as f64 * x_scale as f64;
+        }
+        self.set_x(curr_x);
+        return self.mk_message_block(messages);
     }
 
     fn mk_message_block(&mut self, msgs: Vec<Message>) -> Message {
@@ -231,7 +254,10 @@ impl ContentStreamer {
                 let mut msgs = vec![];
                 for val in arr {
                     let msg = match *val {
-                        Value::Number(_) => Message::Noop,
+                        Value::Number(x) => {
+                            self.move_x(x);
+                            Message::Noop
+                        }
                         Value::Identifier(id) => self.mk_message(&id.to_string()),
                         other => panic!("unexpected array value {:?}", other),
                     };
@@ -241,6 +267,13 @@ impl ContentStreamer {
             }
             _ => panic!("Unexpected operator {:?}", tok),
         }
+    }
+
+    fn set_x(&mut self, x: f64) {
+        self.text_state.matrix[6] = x;
+    }
+    fn move_x(&mut self, x: f64) {
+        self.text_state.matrix[6] -= (x * self.text_state.size.unwrap())/1000.0;
     }
 
     fn parse_value(&mut self) -> Value {

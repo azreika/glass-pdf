@@ -8,7 +8,7 @@ use iced::{Length, Point, Renderer, Theme};
 use crate::content_tokenizer::ContentToken;
 use crate::content_streamer::ContentStreamer;
 use crate::ast::FontLib;
-use crate::viewer_message::Message;
+use crate::viewer_message::{Message,GlyphInfo};
 
 pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
     let flib = font_lib.clone();
@@ -17,7 +17,7 @@ pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
             move || {
                 let stream = ContentStreamer::stream_content(flib.clone(), toks.clone());
                 let task = Task::stream(stream);
-                (Viewer::default(), task)
+                (Viewer { output: HashMap::new(), glyphs: vec![] }, task)
             },
             Viewer::update,
             Viewer::view
@@ -25,30 +25,28 @@ pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
 }
 
 struct Viewer {
-    output: HashMap<i32, TextInfo>
-}
-
-impl Default for Viewer {
-    fn default() -> Self {
-        return Viewer { output: HashMap::new() }
-    }
+    output: HashMap<i32, TextInfo>,
+    glyphs: Vec<GlyphInfo>,
 }
 
 impl Viewer {
     fn update(&mut self, message: Message) {
         match message {
             Message::DrawText { x_pos, y_pos, str, size } => {
-                let foo = self.output.entry(y_pos).or_insert(TextInfo {
+                let entry = self.output.entry(y_pos).or_insert(TextInfo {
                     x: x_pos,
                     txt: String::new(),
                     size: size,
                 });
-                foo.txt += &str;
+                entry.txt += &str;
             },
             Message::DrawBlock(messages) =>  {
                 for message in messages.iter() {
                     self.update(message.clone());
                 }
+            },
+            Message::DrawGlyph(info) => {
+                self.glyphs.push(info);
             },
             Message::Noop => panic!("Noops should have been filtered out"),
         }
@@ -58,7 +56,8 @@ impl Viewer {
         return Canvas::new(Page {
             padding_x: 40.0,
             padding_y: 20.0,
-            output: self.output.clone()
+            output: self.output.clone(),
+            glyphs: self.glyphs.clone(),
         })
             .width(Length::Fill)
             .height(Length::Fill)
@@ -76,7 +75,8 @@ struct TextInfo {
 struct Page {
     padding_x: f32,
     padding_y: f32,
-    output: HashMap<i32, TextInfo>
+    output: HashMap<i32, TextInfo>,
+    glyphs: Vec<GlyphInfo>
 }
 
 impl <Message> canvas::Program<Message> for Page {
@@ -110,12 +110,12 @@ impl <Message> canvas::Program<Message> for Page {
         f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
         geom.push(f2.into_geometry());
 
-        for (pos, info) in self.output.iter() {
+        for info in self.glyphs.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
             let mut txt = canvas::Text::from(
-                info.txt.clone()
+                info.str.clone()
             );
-            txt.position = Point::new(self.padding_x + info.x as f32, *pos as f32 + self.padding_y);
+            txt.position = Point::new(self.padding_x + info.x as f32, info.y as f32 + self.padding_y);
             txt.size = info.size.into();
             frame.fill_text(txt);
             geom.push(frame.into_geometry());

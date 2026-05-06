@@ -143,6 +143,12 @@ pub struct FontLib {
     id_to_font: HashMap<String, Font>,
 }
 
+impl FontLib {
+    pub fn get_font(&self, font_id: String) -> &Font {
+        return self.id_to_font.get(&font_id).unwrap();
+    }
+}
+
 impl Pdf {
     pub fn get_trailer_dict(&self) -> &HashMap<String,Value> {
         for block in self.blocks.iter() {
@@ -192,11 +198,19 @@ impl Pdf {
 }
 
 #[derive(Clone, Debug)]
-struct Font {
+pub struct Font {
     id: String,
     name: String,
     widths: Vec<u32>,
     first_char: u32,
+}
+
+impl Font {
+    pub fn get_width(&self, c: char) -> u32 {
+        let bb = c as u32;
+        let pos = bb - self.first_char;
+        return self.widths[pos as usize];
+    }
 }
 
 impl Value {
