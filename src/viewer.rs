@@ -2,7 +2,8 @@ use crate::content_tokenizer::ContentToken;
 
 use std::collections::HashMap;
 
-use iced::{Color, Element};
+use iced::futures::{Stream, stream};
+use iced::{Color, Element, Task};
 use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
@@ -46,8 +47,8 @@ struct Viewer {
     output: HashMap<i32, TextInfo>
 }
 
-struct Message {
-
+enum Message {
+    DrawText { str: String },
 }
 
 impl Default for Viewer {
@@ -57,7 +58,17 @@ impl Default for Viewer {
 }
 
 impl Viewer {
-    fn update(&mut self, _: Message) {
+    fn update(&mut self, message: Message) {
+        match message {
+            Message::DrawText { str } => {
+                let foo = self.output.entry(0).or_insert(TextInfo {
+                    x: 10,
+                    txt: String::new(),
+                    size: 10.0,
+                });
+                foo.txt += &str;
+            }
+        }
 
     }
 
@@ -72,6 +83,23 @@ impl Viewer {
             .into();
     }
 }
+
+struct FakeObj {
+    value: i32,
+}
+
+impl FakeObj {
+    fn fake_stream(self) -> impl iced::futures::Stream<Item=Message> {
+        return stream::unfold(self, |mut parser| async move {
+            if parser.value >= 10 {
+                return None;
+            }
+            parser.value += 1;
+            return Some((Message::DrawText { str: "hello!".to_string() }, parser));
+        });
+    }
+}
+
 
 impl Parser {
     fn reset_text_state(&mut self) {
@@ -93,7 +121,12 @@ impl Parser {
 
         let output = self.output.clone();
         iced::application(
-            move || (Viewer { output: output.clone() }, iced::Task::none()),
+            move || {
+                let fake_obj = FakeObj {value: 0};
+                let stream = fake_obj.fake_stream();
+                let task = Task::stream(stream);
+                (Viewer { output: output.clone() }, task)
+            },
             Viewer::update,
             Viewer::view
         ).run().unwrap();
