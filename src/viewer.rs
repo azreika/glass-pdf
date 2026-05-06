@@ -21,7 +21,6 @@ struct Parser {
     output: HashMap<i32, TextInfo>,
     text_state: TextState,
     font_lib: FontLib,
-    messages: Vec<Message>,
 }
 
 impl Parser {
@@ -32,7 +31,6 @@ impl Parser {
             output: HashMap::new(),
             text_state: TextState::new(),
             font_lib,
-            messages: vec![],
         };
     }
 
@@ -118,11 +116,27 @@ impl Parser {
         self.text_state = TextState::new();
     }
 
-    fn parse_program(&mut self) {
+    fn parse_program(&mut self) -> Vec<Message> {
+        let mut messages = vec![];
         while self.offset < self.tokens.len() {
             let tok = &self.tokens[self.offset];
             if matches!(tok, ContentToken::BTKeyword) {
-                self.parse_text_block();
+                assert!(matches!(self.next_token(), ContentToken::BTKeyword));
+                let mut stack = vec![];
+
+                while !matches!(self.peek(), ContentToken::ETKeyword) {
+                    if self.is_operator(&self.peek()) {
+                        let tok = self.next_token();
+                        let msg = self.process_op(&mut stack, &tok);
+                        messages.push(msg);
+                        continue;
+                    }
+                    stack.push(self.parse_value());
+                }
+                self.next_token();
+
+                assert!(stack.is_empty());
+                self.reset_text_state();
             }
             self.offset += 1;
         }
@@ -130,11 +144,11 @@ impl Parser {
         let mut text_vec: Vec<(&i32, &TextInfo)> = self.output.iter().collect();
         text_vec.sort_by(|a,b| a.0.cmp(b.0));
         text_vec.reverse();
+        return messages;
     }
 
     fn view_program(&mut self) {
-        self.parse_program();
-        let messages = self.messages.clone();
+        let messages = self.parse_program();
         iced::application(
             move || {
                 let fake_obj = FakeObj { pos: 0, value: messages.clone() };
@@ -284,25 +298,6 @@ impl Parser {
         }
         self.next_token();
         return Value::Array(arr);
-    }
-
-    fn parse_text_block(&mut self) {
-        assert!(matches!(self.next_token(), ContentToken::BTKeyword));
-        let mut stack = vec![];
-
-        while !matches!(self.peek(), ContentToken::ETKeyword) {
-            if self.is_operator(&self.peek()) {
-                let tok = self.next_token();
-                let msg = self.process_op(&mut stack, &tok);
-                self.messages.push(msg);
-                continue;
-            }
-            stack.push(self.parse_value());
-        }
-        self.next_token();
-
-        assert!(stack.is_empty());
-        self.reset_text_state();
     }
 }
 
