@@ -7,8 +7,8 @@ pub struct FontLib {
 }
 
 impl FontLib {
-    pub fn get_font(&self, font_id: String) -> &Font {
-        return self.id_to_font.get(&font_id).unwrap();
+    pub fn get_font(&self, font_id: &str) -> &Font {
+        return self.id_to_font.get(font_id).unwrap();
     }
 }
 

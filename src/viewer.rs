@@ -17,7 +17,7 @@ pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
         move || {
             let stream = ContentStreamer::stream_content(flib.clone(), toks.clone());
             let task = Task::stream(stream);
-            (Viewer { glyphs: vec![] }, task)
+            (Viewer { font_lib: flib.clone(), glyphs: vec![] }, task)
         },
         Viewer::update,
         Viewer::view
@@ -31,6 +31,7 @@ pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
 }
 
 struct Viewer {
+    font_lib: FontLib,
     glyphs: Vec<GlyphInfo>,
 }
 
@@ -54,6 +55,7 @@ impl Viewer {
             padding_x: 40.0,
             padding_y: 20.0,
             glyphs: self.glyphs.clone(),
+            font_lib: self.font_lib.clone(),
         })
             .width(Length::Fill)
             .height(Length::Fill)
@@ -65,6 +67,7 @@ struct Page {
     padding_x: f64,
     padding_y: f64,
     glyphs: Vec<GlyphInfo>,
+    font_lib: FontLib,
 }
 
 struct PageState {
@@ -119,13 +122,14 @@ impl <Msg> canvas::Program<Msg> for Page {
 
             let cc = info.byte;
 
-            let glyph_id = info.font.ttf.lookup_glyph_index(cc as char);
+            let font = self.font_lib.get_font(&info.font_id);
+            let glyph_id = font.ttf.lookup_glyph_index(cc as char);
             if glyph_id == 0 {
                 // glyph not found, skip or use replacement
                 println!("HUH MISSING!?!? {}", cc);
             }
 
-            let (metrics, bitmap) = info.font.ttf.rasterize_indexed(glyph_id, (info.size*scale_factor) as f32);
+            let (metrics, bitmap) = font.ttf.rasterize_indexed(glyph_id, (info.size*scale_factor) as f32);
             if metrics.width == 0 || metrics.height == 0 {
                 continue;
             }

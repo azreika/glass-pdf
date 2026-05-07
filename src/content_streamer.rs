@@ -25,20 +25,11 @@ struct GraphicsState {
 }
 
 impl GraphicsState {
-    fn init_matrix() -> Vec<f64> {
-        return vec![
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            0.0, 0.0, 1.0
-        ];
-    }
-
     fn new() -> Self {
         return GraphicsState {
             ctm: Matrix::new(),
         };
     }
-
 }
 
 impl TextState {
@@ -238,7 +229,6 @@ impl ContentStreamer {
                     mat.push(self.pop_number());
                 }
                 mat.reverse();
-
                 let mat = Matrix::vec6_to_matrix(&mat);
                 let result = multiply_3d(self.curr_ctm(), &mat);
                 self.graphics_state.ctm = result;
@@ -293,10 +283,14 @@ impl ContentStreamer {
         };
     }
 
+    fn get_font_id(&self) -> String {
+        return self.get_font().id.clone();
+    }
+
     fn get_font(&self) -> &Font {
         return match self.text_state.font {
             None => panic!(),
-            Some(ref other) => self.font_lib.get_font(other.to_string()),
+            Some(ref other) => self.font_lib.get_font(&other),
         }
     }
 
@@ -321,7 +315,7 @@ impl ContentStreamer {
                 y: screen_y,
                 byte: byte,
                 size: size,
-                font: self.get_font().clone(),
+                font_id: self.get_font_id(),
             }));
 
             let cwidth = self.char_width(byte) * x_scale;
