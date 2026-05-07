@@ -318,6 +318,7 @@ impl Parser<'_> {
             assert!(is_identifier(&tok));
             return Value::Identifier(get_id(&tok));
         } else {
+            println!("Unexpected value: {:?}", self.peek());
             panic!();
         }
     }

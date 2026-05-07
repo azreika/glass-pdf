@@ -193,12 +193,26 @@ impl PdfTokenizer {
 
                 let mut chars = vec![];
                 // TODO: add depth params
-                while !self.peek_is(')') {
-                    chars.push(self.lex_char());
+                let mut depth = 1;
+                while depth > 0 && self.offset < self.data.len() {
+                    let mm = self.lex_char();
+                    match mm {
+                        '(' => { depth += 1; chars.push(mm); },
+                        ')' => {
+                            depth -= 1;
+                            if depth > 0 { chars.push(mm) };
+                        },
+                        '\\' => {
+                            chars.push(mm);
+                            if self.offset < self.data.len() {
+                                chars.push(self.lex_char()); // consume \(, \), \\, \n, etc.
+                            }
+                        },
+                        _ => chars.push(mm),
+                    }
                 }
                 let str = chars.iter().collect();
                 self.push_token(loc, PdfToken::String(str));
-                self.eat_char(')');
                 self.push_token(loc, PdfToken::RightParens);
             } else {
                 let word = self.lex_word();

@@ -18,7 +18,7 @@ use crate::content_tokenizer::{tokenize_stream};
 use crate::viewer::{view_contents};
 
 fn main() {
-    let data: Vec<u8> = fs::read("./examples/samplepdf.pdf").expect("woops");
+    let data: Vec<u8> = fs::read("./examples/pages_pdf.pdf").expect("woops");
     let tokens = tokenize_pdf(&data);
     let ast = parse_tokens(&tokens);
     println!("{}", ast);
