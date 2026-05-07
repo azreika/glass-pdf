@@ -123,16 +123,17 @@ impl <Msg> canvas::Program<Msg> for Page {
             let cc = info.byte;
 
             let font = self.font_lib.get_font(&info.font_id);
+
+
             let glyph_id = font.ttf.lookup_glyph_index(cc as char);
-            if glyph_id == 0 {
-                // glyph not found, skip or use replacement
-                println!("HUH MISSING!?!? {}", cc);
-            }
+            assert_ne!(glyph_id, 0);
 
             let (metrics, bitmap) = font.ttf.rasterize_indexed(glyph_id, (info.size*scale_factor) as f32);
             if metrics.width == 0 || metrics.height == 0 {
                 continue;
             }
+            // assert!(info.width/2.0 >= metrics.width as f64);
+            let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
 
             let rgba: Vec<u8> = bitmap.iter().flat_map(|&a| [0,0,0,a]).collect();
             let handle = iced::widget::image::Handle::from_rgba(
@@ -145,7 +146,7 @@ impl <Msg> canvas::Program<Msg> for Page {
             y_pos -= info.y + self.padding_y;
             y_pos -= (metrics.height as i32 + metrics.ymin) as f64/scale_factor;
 
-            let x_pos = self.padding_x + info.x;
+            let x_pos = self.padding_x + info.x + gap;
 
             let screen_x = x_pos * state.scale;
             let screen_y = y_pos * state.scale;

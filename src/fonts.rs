@@ -28,4 +28,9 @@ impl Font {
         let pos = bb - self.first_char;
         return self.widths[pos as usize];
     }
+
+    pub fn char_width(&self, c: u8) -> f64 {
+        let width = self.get_width(c) as f64;
+        return width;
+    }
 }

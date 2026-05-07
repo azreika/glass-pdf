@@ -12,6 +12,7 @@ pub struct GlyphInfo {
     pub byte: u8,
     pub size: f64,
     pub font_id: String,
+    pub width: f64,
 }
 
 #[derive(Copy, Clone)]
