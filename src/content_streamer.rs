@@ -42,13 +42,6 @@ impl GraphicsState {
 }
 
 impl TextState {
-    fn init_matrix() -> Vec<f64> {
-        return vec![
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            0.0, 0.0, 1.0];
-    }
-
     fn new() -> Self {
         return TextState {
             matrix: Matrix::new(),
@@ -59,14 +52,17 @@ impl TextState {
 }
 
 pub struct ContentStreamer {
-    tokens: Vec<ContentToken>,
-    offset: usize,
-    text_state: TextState,
-    font_lib: FontLib,
-    stack: Vec<Value>,
     state: State,
-    graphics_state_stack: Vec<GraphicsState>,
+    tokens: Vec<ContentToken>,
+    stack: Vec<Value>,
+    offset: usize,
+
+    text_state: TextState,
+
     graphics_state: GraphicsState,
+    graphics_state_stack: Vec<GraphicsState>,
+
+    font_lib: FontLib,
 }
 
 
