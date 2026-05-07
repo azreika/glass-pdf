@@ -147,6 +147,16 @@ impl Value {
         };
         return arr;
     }
+
+    pub fn to_vec_f32(&self) -> Vec<f32> {
+        let arr = match self {
+            Value::Vector(arr) => {
+                arr.iter().map(|c| return c.to_num()).collect()
+            }
+            _ => panic!(),
+        };
+        return arr;
+    }
 }
 
 #[derive(Debug)]

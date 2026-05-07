@@ -15,10 +15,10 @@ mod transform;
 use crate::pdf_tokenizer::{tokenize_pdf};
 use crate::parser::{parse_tokens};
 use crate::content_tokenizer::{tokenize_stream};
-use crate::viewer::{view_contents};
+use crate::viewer::{PageCtx, view_contents};
 
 fn main() {
-    let data: Vec<u8> = fs::read("./examples/pages_pdf.pdf").expect("woops");
+    let data: Vec<u8> = fs::read("./examples/samplepdf.pdf").expect("woops");
     let tokens = tokenize_pdf(&data);
     let ast = parse_tokens(&tokens);
     println!("{}", ast);
@@ -45,8 +45,21 @@ fn main() {
     let fonts = resources.get("Font");
     let font_lib = ast.process_fonts(fonts);
 
+    let media_box = page.get("MediaBox").to_vec_f32();
+    assert_eq!(media_box.len(), 4);
+    assert_eq!(media_box[0], 0.0);
+    assert_eq!(media_box[1], 0.0);
+    let page_width = media_box[2] as f64;
+    let page_height = media_box[3] as f64;
+    let page_ctx = PageCtx {
+        height: page_height,
+        width: page_width,
+        font_lib: font_lib,
+        scale_factor: 1.0,
+    };
+
     let decoded_contents = contents.decode();
     println!("Content:\n{}", contents.decode_to_string());
     let tokenized_contents = tokenize_stream(decoded_contents);
-    view_contents(&font_lib, &tokenized_contents);
+    view_contents(&page_ctx, &tokenized_contents);
 }

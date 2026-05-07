@@ -2,6 +2,7 @@
 pub enum Message {
     DrawBlock(Vec<Message>),
     DrawGlyph(GlyphInfo),
+    SetScaleFactor(f32),
     Noop,
 }
 
