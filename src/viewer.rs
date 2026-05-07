@@ -135,7 +135,7 @@ impl <Message> canvas::Program<Message> for Page {
 
             let mut y_pos = page_height as f32;
             y_pos -= info.y as f32 + self.padding_y;
-            y_pos += metrics.height as f32 - metrics.ymin as f32;
+            y_pos -= metrics.height as f32 + metrics.ymin as f32;
 
             frame.draw_image(iced::Rectangle {
                 x: self.padding_x + info.x as f32,
@@ -145,8 +145,6 @@ impl <Message> canvas::Program<Message> for Page {
             }, &handle);
 
             geom.push(frame.into_geometry());
-
-
         }
 
         return geom;
