@@ -26,6 +26,12 @@ pub trait Tokenizer<T> {
         return result;
     }
 
+    fn lex_u8(&mut self) -> u8 {
+        let result = self.peek_u8();
+        self.step_ahead();
+        return result;
+    }
+
     fn eat_char(&mut self, c: char) {
         let cc = self.lex_char();
         assert_eq!(cc ,c);

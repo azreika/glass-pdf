@@ -28,6 +28,7 @@ pub enum ContentToken {
     LBracket,
     RBracket,
     Null,
+    StringBytes(Vec<u8>),
 }
 
 struct ContentTokenizer {
@@ -120,27 +121,26 @@ impl ContentTokenizer {
                 self.push_token(tok.clone());
 
                 if matches!(tok, ContentToken::LParens) {
-                    let mut chars = vec![];
+                    let mut bytes = vec![];
                     let mut depth = 1;
                     while depth > 0 && self.offset < self.data.len() {
-                        let mm = self.lex_char();
-                        match mm {
+                        let mm = self.lex_u8();
+                        match mm as char {
                             '\\' => {
-                                chars.push(mm);
+                                bytes.push(mm);
                                 if self.offset < self.data.len() {
-                                    chars.push(self.lex_char()); // consume \(, \), \\, \n, etc.
+                                    bytes.push(self.lex_u8()); // consume \(, \), \\, \n, etc.
                                 }
                             },
                             ')' => {
                                 depth -= 1;
-                                if depth > 0 { chars.push(mm); }
+                                if depth > 0 { bytes.push(mm); }
                             },
-                            '(' => { depth += 1; chars.push(mm); },
-                            _   => chars.push(mm),
+                            '(' => { depth += 1; bytes.push(mm); },
+                            _   => bytes.push(mm),
                         }
                     }
-                    let str = chars.iter().collect();
-                    self.push_token(ContentToken::Identifier(str));
+                    self.push_token(ContentToken::StringBytes(bytes));
                     self.push_token(ContentToken::RParens);
                 }
             }

@@ -16,7 +16,8 @@ struct TextState {
 enum Value {
     Number(f64),
     Identifier(String),
-    Array (Vec<Box<Value>>),
+    Array(Vec<Box<Value>>),
+    StringBytes(Vec<u8>),
 }
 
 #[derive(Clone,Debug)]
@@ -312,14 +313,22 @@ impl ContentStreamer {
     fn pop_string(&mut self) -> String {
         return match self.stack.pop().unwrap() {
             Value::Identifier(v) => v,
-            other => panic!("expected number, got {:?}", other)
+            other => panic!("expected string, got {:?}", other)
         };
     }
+
+    fn pop_string_u8(&mut self) -> Vec<u8> {
+        return match self.stack.pop().unwrap() {
+            Value::StringBytes(v) => v,
+            other => panic!("expected string bytes, got {:?}", other)
+        };
+    }
+
 
     fn pop_array(&mut self) -> Vec<Box<Value>> {
         return match self.stack.pop().unwrap() {
             Value::Array(arr) => arr,
-            other => panic!("expected number, got {:?}", other)
+            other => panic!("expected array, got {:?}", other)
         };
     }
 
@@ -345,13 +354,12 @@ impl ContentStreamer {
         return (width * size) / 1000.0;
     }
 
-    fn mk_message(&mut self, str: &str) -> Message {
+    fn mk_message(&mut self, bytes: Vec<u8>) -> Message {
         let text_x_scale = self.text_state.matrix[0] as f32;
 
         let mut messages = vec![];
 
-        let bytes = str.as_bytes();
-        let (result, real_encoding, any_malformed) = MACINTOSH.decode(bytes);
+        let (result, real_encoding, any_malformed) = MACINTOSH.decode(&bytes);
         println!("BYTES: {:?}", bytes);
         assert_eq!(real_encoding, MACINTOSH);
         assert!(!any_malformed);
@@ -406,8 +414,8 @@ impl ContentStreamer {
             },
             ContentToken::TjKeyword => {
                 // show one
-                let str = self.pop_string();
-                return self.mk_message(&str);
+                let str = self.pop_string_u8();
+                return self.mk_message(str);
             },
             ContentToken::TJKeyword => {
                 // show one or mroe
@@ -418,9 +426,11 @@ impl ContentStreamer {
                         Value::Number(x) => {
                             self.move_x(x);
                             Message::Noop
-                        }
-                        Value::Identifier(id) => self.mk_message(&id.to_string()),
-                        other => panic!("unexpected array value {:?}", other),
+                        },
+                        Value::StringBytes(vec) => {
+                            self.mk_message(vec)
+                        },
+                        other => panic!("unexpected value {:?}", other),
                     };
                     msgs.push(msg);
                 }
@@ -444,6 +454,7 @@ impl ContentStreamer {
             ContentToken::Number(x) => Value::Number(x),
             ContentToken::LParens => self.parse_parens(),
             ContentToken::LBracket => self.parse_array(),
+            ContentToken::StringBytes(bytes) => Value::StringBytes(bytes),
             _ => panic!("Unexpected token {:?}", tok),
         }
     }
