@@ -39,6 +39,18 @@ pub enum ContentToken {
     AngleClose,
     BMCKeyword,
     EMCKeyword,
+    GSKeyword,
+    GNonStroke,
+    GStroke,
+    RGNonStroke,
+    RGStroke,
+    Star,
+    WLineWidth,
+    LineCap,
+    LineJoin,
+    Stroke,
+    CharSpacing,
+    DoKeyword,
 }
 
 struct ContentTokenizer {
@@ -77,6 +89,19 @@ impl Tokenizer<ContentToken> for ContentTokenizer {
             ">" => ContentToken::AngleClose,
             "BDC" => ContentToken::BMCKeyword,
             "EMC" => ContentToken::EMCKeyword,
+            "BMC" => ContentToken::BMCKeyword,
+            "gs" => ContentToken::GSKeyword,
+            "g" => ContentToken::GNonStroke,
+            "G" => ContentToken::GStroke,
+            "rg" => ContentToken::RGNonStroke,
+            "RG" => ContentToken::RGStroke,
+            "*" => ContentToken::Star,
+            "w" => ContentToken::WLineWidth,
+            "J" => ContentToken::LineCap,
+            "j" => ContentToken::LineJoin,
+            "S" => ContentToken::Stroke,
+            "Tc" => ContentToken::CharSpacing,
+            "Do" => ContentToken::DoKeyword,
             _ => {
                 println!("missed word: `{}`", word);
                 panic!();

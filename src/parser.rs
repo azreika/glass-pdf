@@ -98,20 +98,27 @@ impl Parser<'_> {
                 },
                 PdfToken::XRefKeyword => {
                     self.eat_next_token();
-                    let v1 = self.eat_next_token();
-                    assert!(is_num(&v1));
-                    let v2 = self.eat_next_token();
-                    assert!(is_num(&v2));
-
                     while self.peek() != PdfToken::TrailerKeyword {
                         let v1 = self.eat_next_token();
                         assert!(is_num(&v1));
-                        let offset = get_num(&v1);
                         let v2 = self.eat_next_token();
                         assert!(is_num(&v2));
-                        let kk = self.eat_next_token();
-                        assert!(kk == PdfToken::FKeyword || kk == PdfToken::NKeyword);
-                        xref.push(SrcLoc::new(offset as usize));
+
+                        // TODO: fix up IDs here
+                        let start_id = get_num(&v1);
+                        let num_objs = get_num(&v2);
+
+                        for _ in 0..num_objs as usize {
+                            let v1 = self.eat_next_token();
+                            assert!(is_num(&v1));
+                            let offset = get_num(&v1);
+                            let v2 = self.eat_next_token();
+                            assert!(is_num(&v2));
+                            let kk = self.eat_next_token();
+                            println!("hii? {:?} {:?} {:?}", kk, v1, v2);
+                            assert!(kk == PdfToken::FKeyword || kk == PdfToken::NKeyword);
+                            xref.push(SrcLoc::new(offset as usize));
+                        }
                     }
                 },
                 PdfToken::TrailerKeyword => {
@@ -121,7 +128,7 @@ impl Parser<'_> {
                     self.eat_expected(PdfToken::StartXRefKeyword);
                     let v1 = self.eat_next_token();
                     assert!(is_num(&v1));
-                    assert_eq!(start_xref, 0.0);
+                    // TODO: what if we have multiple xrefs?
                     start_xref = get_num(&v1);
                     self.eat_expected(PdfToken::EOFKeyword);
                 },
@@ -271,7 +278,6 @@ impl Parser<'_> {
             let mut items = vec![];
             self.eat_next_token();
             while self.peek() != PdfToken::RightBracket {
-                assert!(self.peek() != PdfToken::LeftBracket);
                 if self.peek() == PdfToken::ForwardSlash {
                     self.eat_next_token();
                     let tok = &self.eat_next_token();
@@ -291,6 +297,8 @@ impl Parser<'_> {
                     }
                     assert!(self.eat_next_token() == PdfToken::RefKeyword);
                     items.push(Value::Reference { id: v1 as i32, gxn: v2 as i32});
+                } else if matches!(self.peek(), PdfToken::LeftBracket) {
+                    items.push(self.eat_value());
                 } else {
                     items.push(self.eat_value());
                 }
@@ -320,6 +328,12 @@ impl Parser<'_> {
         } else if self.peek() == PdfToken::BooleanTrue {
             self.eat_next_token();
             return Value::Boolean(true);
+        } else if self.peek() == PdfToken::BooleanFalse {
+            self.eat_next_token();
+            return Value::Boolean(false);
+        } else if self.peek() == PdfToken::Null {
+            self.eat_next_token();
+            return Value::Null;
         } else {
             println!("Unexpected value: {:?}", self.peek());
             panic!();

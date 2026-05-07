@@ -18,7 +18,7 @@ use crate::content_tokenizer::{tokenize_stream};
 use crate::viewer::{PageCtx, view_contents};
 
 fn main() {
-    let data: Vec<u8> = fs::read("./examples/samplepdf.pdf").expect("woops");
+    let data: Vec<u8> = fs::read("./examples/NDIS_pricing.pdf").expect("woops");
     let tokens = tokenize_pdf(&data);
     let ast = parse_tokens(&tokens);
     println!("{}", ast);
@@ -35,12 +35,17 @@ fn main() {
 
     let kids = pages.get("Kids");
     let vec = kids.get_vec();
-    assert_eq!(vec.len(), 1);
+    assert!(vec.len() >= 1);
     let page = ast.get_object(&vec[0]);
     println!("Page: {}", page);
 
     let contents = page.get("Contents").deref(&ast);
-    let resources = page.get("Resources").deref(&ast);
+
+    let resource_ref = page.get("Resources");
+    let resources = match resource_ref {
+        ast::Value::Reference{ .. } => resource_ref.deref(&ast),
+        _ => resource_ref,
+    };
     println!("Resources:\n{}", resources);
     let fonts = resources.get("Font");
     let font_lib = ast.process_fonts(fonts);

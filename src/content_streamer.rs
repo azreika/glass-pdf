@@ -153,7 +153,8 @@ impl ContentStreamer {
             matches!(tok, ContentToken::TmKeyword) ||
             matches!(tok, ContentToken::TfKeyword) ||
             matches!(tok, ContentToken::TjKeyword) ||
-            matches!(tok, ContentToken::TJKeyword);
+            matches!(tok, ContentToken::TJKeyword) ||
+            matches!(tok, ContentToken::GSKeyword);
     }
 
     fn is_main_operator(&self, tok: &ContentToken) -> bool {
@@ -174,7 +175,8 @@ impl ContentStreamer {
             matches!(tok, ContentToken::VKeyword) ||
             matches!(tok, ContentToken::YKeyword) ||
             matches!(tok, ContentToken::EMCKeyword) ||
-            matches!(tok, ContentToken::BMCKeyword)
+            matches!(tok, ContentToken::BMCKeyword | ContentToken::WStarKeyword) ||
+            matches!(tok, ContentToken::GSKeyword)
             ;
     }
 
@@ -196,9 +198,9 @@ impl ContentStreamer {
                 println!("TODO: implement rectangle thing");
                 return Message::Noop;
             },
-            ContentToken::WKeyword => {
+            ContentToken::WKeyword | ContentToken::WStarKeyword => {
                 // Clipping Path Operator
-                println!("TODO: implement clipping path operator W");
+                println!("TODO: implement clipping path operator W/W*");
                 return Message::Noop;
             },
             ContentToken::NKeyword => {
@@ -209,6 +211,11 @@ impl ContentStreamer {
             ContentToken::CsStroke => {
                 let _cs = self.pop_string();
                 println!("TODO: implement colour space operator cs");
+                return Message::Noop;
+            },
+            ContentToken::GSKeyword => {
+                let _cs = self.pop_string();
+                println!("TODO: implement gs keyword");
                 return Message::Noop;
             },
             ContentToken::EndCsStroke => {
@@ -401,6 +408,11 @@ impl ContentStreamer {
                     msgs.push(msg);
                 }
                 return self.mk_message_block(msgs);
+            },
+            ContentToken::GSKeyword => {
+                let _cs = self.pop_string();
+                println!("TODO: implement gs keyword");
+                return Message::Noop;
             },
             _ => panic!("Unexpected operator {:?}", tok),
         }

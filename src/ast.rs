@@ -28,6 +28,7 @@ pub enum Value {
     Vector(Vec<Value>),
     Identifier(String),
     Boolean(bool),
+    Null,
 }
 
 impl Value {
@@ -203,10 +204,9 @@ impl Pdf {
                 widths_ref
             };
 
-            println!("CHECKING!!! {:?}", obj_info);
             let maybe_enc = obj_info.try_get("Encoding");
+            // TODO: handle differente encodings
             let encoding = if let Some(enc) = maybe_enc {
-                assert_eq!(enc.get_string(), "MacRomanEncoding".to_string());
                 Some(enc.get_string())
             } else {
                 None
@@ -221,17 +221,6 @@ impl Pdf {
             let inner_name = descriptor.get("FontName").get_string();
 
             let ff = fontdue::Font::from_bytes(bb.clone(), fontdue::FontSettings::default()).unwrap();
-            let face = ttf_parser::Face::parse(&bb, 0).unwrap();
-            println!("{:?}", ff);
-            for name in face.names() {
-                let raw_name = std::str::from_utf8(name.name).unwrap();
-                println!("id={} platform={:?} raw={:?}",
-                    name.name_id,
-                    name.platform_id,
-                    raw_name);
-
-                assert_eq!(raw_name, inner_name);
-            }
             let font = Font {
                 id: id.to_string(),
                 name: inner_name,
@@ -291,6 +280,9 @@ impl fmt::Display for Value {
             Value::Boolean(x) => {
                 write!(f, "{x}")
             },
+            Value::Null => {
+                write!(f, "NULL")
+            }
         }
     }
 }

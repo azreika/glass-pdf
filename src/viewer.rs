@@ -144,7 +144,6 @@ impl <Msg> canvas::Program<Msg> for Page {
             if metrics.width == 0 || metrics.height == 0 {
                 continue;
             }
-            // assert!(info.width/2.0 >= metrics.width as f64);
             let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
 
             let rgba: Vec<u8> = bitmap.iter().flat_map(|&a| [0,0,0,a]).collect();
