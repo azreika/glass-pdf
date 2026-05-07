@@ -178,6 +178,8 @@ impl Pdf {
             let descriptor = obj_info.get("FontDescriptor").deref(&self);
             let widths = obj_info.get("Widths").deref(&self);
 
+            assert_eq!(obj_info.get("Encoding").get_string(), "MacRomanEncoding".to_string());
+
             let subtype = obj_info.get("Subtype").get_string();
             assert_eq!(subtype, "TrueType");
 
@@ -189,8 +191,6 @@ impl Pdf {
             let ff = fontdue::Font::from_bytes(bb.clone(), fontdue::FontSettings::default()).unwrap();
             let face = ttf_parser::Face::parse(&bb, 0).unwrap();
             println!("{:?}", ff);
-
-
             for name in face.names() {
                 let raw_name = std::str::from_utf8(name.name).unwrap();
                 println!("id={} platform={:?} raw={:?}",

@@ -1,3 +1,4 @@
+use encoding_rs::MACINTOSH;
 use iced::futures::stream;
 use crate::content_tokenizer::ContentToken;
 use crate::fonts::{Font, FontLib};
@@ -337,7 +338,7 @@ impl ContentStreamer {
         }
     }
 
-    fn char_width(&self, c: char) -> f64 {
+    fn char_width(&self, c: u8) -> f64 {
         let font = self.get_font();
         let width = font.get_width(c) as f64;
         let size = self.text_state.size.unwrap();
@@ -348,7 +349,18 @@ impl ContentStreamer {
         let text_x_scale = self.text_state.matrix[0] as f32;
 
         let mut messages = vec![];
-        for s in str.chars().into_iter() {
+
+        let bytes = str.as_bytes();
+        let (result, real_encoding, any_malformed) = MACINTOSH.decode(bytes);
+        println!("BYTES: {:?}", bytes);
+        assert_eq!(real_encoding, MACINTOSH);
+        assert!(!any_malformed);
+        let decoded = result.into_owned();
+        let chars: Vec<char> = decoded.chars().collect();
+
+        assert_eq!(chars.len(), bytes.len());
+
+        for (byte, unicode_char) in bytes.iter().zip(chars.iter()) {
             let ctm = self.curr_ctm();
             let effective = multiply_3d(&self.text_state.matrix, ctm);
             let screen_x = effective[6];
@@ -358,11 +370,12 @@ impl ContentStreamer {
             messages.push(Message::DrawGlyph(GlyphInfo{
                 x: screen_x as i32,
                 y: screen_y as i32,
-                str: s.to_string(),
+                str: unicode_char.to_string(),
                 size: size,
                 font: self.get_font().clone(),
             }));
-            let new_x = self.text_x() + self.char_width(s) as f64 * text_x_scale as f64;
+            println!("{:?}", unicode_char.to_string());
+            let new_x = self.text_x() + self.char_width(*byte) as f64 * text_x_scale as f64;
             self.set_x(new_x);
         }
         return self.mk_message_block(messages);

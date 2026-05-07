@@ -23,7 +23,7 @@ pub struct Font {
 }
 
 impl Font {
-    pub fn get_width(&self, c: char) -> u32 {
+    pub fn get_width(&self, c: u8) -> u32 {
         let bb = c as u32;
         let pos = bb - self.first_char;
         return self.widths[pos as usize];

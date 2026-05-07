@@ -117,14 +117,16 @@ impl <Message> canvas::Program<Message> for Page {
         for info in self.glyphs.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
 
-            let cc = if info.str.len() != 1 {
-                println!("unhandled info glyph?? {} {:?}", info.str.len(), info.str);
-                '?'
-            } else {
-                info.str.chars().nth(0).unwrap()
-            };
+            assert_eq!(info.str.chars().count(), 1);
+            let cc = info.str.chars().next().unwrap();
 
-            let (metrics, bitmap) = info.font.ttf.rasterize(cc, info.size*scale_factor);
+            let glyph_id = info.font.ttf.lookup_glyph_index(cc);
+            if glyph_id == 0 {
+                // glyph not found, skip or use replacement
+                println!("HUH MISSING!?!? {}", cc);
+            }
+
+            let (metrics, bitmap) = info.font.ttf.rasterize_indexed(glyph_id, info.size*scale_factor);
             if metrics.width == 0 || metrics.height == 0 {
                 continue;
             }
