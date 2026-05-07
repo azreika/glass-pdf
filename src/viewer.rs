@@ -39,14 +39,6 @@ struct Viewer {
 impl Viewer {
     fn update(&mut self, message: Message) {
         match message {
-            Message::DrawText { x_pos, y_pos, str, size } => {
-                let entry = self.output.entry(y_pos).or_insert(TextInfo {
-                    x: x_pos,
-                    txt: String::new(),
-                    size: size,
-                });
-                entry.txt += &str;
-            },
             Message::DrawBlock(messages) =>  {
                 for message in messages.iter() {
                     self.update(message.clone());
