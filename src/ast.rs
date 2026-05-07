@@ -104,7 +104,16 @@ impl Value {
         }
     }
 
-    pub fn decode(&self) -> String {
+    pub fn decode_to_string(&self) -> String {
+        let bytes = self.decode();
+        let mut str = String::new();
+        for &b in bytes.iter() {
+            str += &(b as char).to_string();
+        }
+        return str;
+    }
+
+    pub fn decode(&self) -> Vec<u8> {
         let bytes = self.bytes();
 
         let metadata = self.metadata();
@@ -114,12 +123,7 @@ impl Value {
         let mut z = ZlibDecoder::new(&bytes[..]);
         let mut w = Vec::new();
         z.read_to_end(&mut w).unwrap();
-
-        let mut str = String::new();
-        for &b in w.iter() {
-            str += &(b as char).to_string();
-        }
-        return str;
+        return w;
     }
 
     fn to_vec_u32(&self) -> Vec<u32> {
@@ -140,7 +144,7 @@ pub struct Pdf {
 
 #[derive(Clone, Debug)]
 pub struct FontLib {
-    id_to_font: HashMap<String, Font>,
+    pub id_to_font: HashMap<String, Font>,
 }
 
 impl FontLib {
@@ -183,11 +187,34 @@ impl Pdf {
             let descriptor = obj_info.get("FontDescriptor").deref(&self);
             let widths = obj_info.get("Widths").deref(&self);
 
+            let subtype = obj_info.get("Subtype").get_string();
+            assert_eq!(subtype, "TrueType");
+
+            let font_file = descriptor.get("FontFile2").deref(&self);
+            let bb = font_file.decode();
+
+            let inner_name = descriptor.get("FontName").get_string();
+
+            let ff = fontdue::Font::from_bytes(bb.clone(), fontdue::FontSettings::default()).unwrap();
+            let face = ttf_parser::Face::parse(&bb, 0).unwrap();
+
+            for name in face.names() {
+                let raw_name = std::str::from_utf8(name.name).unwrap();
+                println!("id={} platform={:?} raw={:?}",
+                    name.name_id,
+                    name.platform_id,
+                    raw_name);
+
+                assert_eq!(raw_name, inner_name);
+            }
+
             let font = Font {
                 id: id.to_string(),
-                name: descriptor.get("FontName").to_string(),
+                name: inner_name,
                 widths: widths.to_vec_u32(),
                 first_char: obj_info.get("FirstChar").to_num() as u32,
+                ttf: ff,
+                font_bytes: bb,
             };
             id_to_font.insert(id.to_string(), font);
         }
@@ -200,9 +227,11 @@ impl Pdf {
 #[derive(Clone, Debug)]
 pub struct Font {
     id: String,
-    name: String,
+    pub name: String,
     widths: Vec<u32>,
     first_char: u32,
+    pub ttf: fontdue::Font,
+    pub font_bytes: Vec<u8>,
 }
 
 impl Font {

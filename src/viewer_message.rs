@@ -1,3 +1,5 @@
+use crate::ast::Font;
+
 #[derive(Clone, Debug)]
 pub enum Message {
     DrawText { x_pos: i32, y_pos: i32, str: String, size: f32 },
@@ -12,6 +14,7 @@ pub struct GlyphInfo {
     pub y: i32,
     pub str: String,
     pub size: f32,
+    pub font: Font,
 }
 
 #[derive(Copy, Clone)]

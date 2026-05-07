@@ -43,7 +43,7 @@ fn main() {
     let fonts = resources.get("Font");
     let font_lib = ast.process_fonts(fonts);
 
-    let decoded_contents = contents.decode();
+    let decoded_contents = contents.decode_to_string();
 
     println!("Content:\n{}", decoded_contents);
     let tokenized_contents = tokenize_stream(decoded_contents);

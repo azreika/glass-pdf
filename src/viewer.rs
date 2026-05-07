@@ -13,15 +13,22 @@ use crate::viewer_message::{Message,GlyphInfo};
 pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
     let flib = font_lib.clone();
     let toks = tokens.clone();
-    iced::application(
-            move || {
-                let stream = ContentStreamer::stream_content(flib.clone(), toks.clone());
-                let task = Task::stream(stream);
-                (Viewer { output: HashMap::new(), glyphs: vec![]}, task)
-            },
-            Viewer::update,
-            Viewer::view
-        ).run().unwrap();
+
+    let mut app = iced::application(
+        move || {
+            let stream = ContentStreamer::stream_content(flib.clone(), toks.clone());
+            let task = Task::stream(stream);
+            (Viewer { output: HashMap::new(), glyphs: vec![]}, task)
+        },
+        Viewer::update,
+        Viewer::view
+    );
+
+    for (_, font) in font_lib.id_to_font.iter() {
+        app = app.font(font.font_bytes.clone());
+    }
+
+    app.run().unwrap();
 }
 
 struct Viewer {
@@ -119,6 +126,8 @@ impl <Message> canvas::Program<Message> for Page {
             );
             txt.position = Point::new(self.padding_x + info.x as f32, info.y as f32 + self.padding_y);
             txt.size = info.size.into();
+            let font_name: &'static str = Box::leak(info.font.name.clone().into_boxed_str());
+            txt.font = iced::Font::with_name(&font_name);
             frame.fill_text(txt);
             geom.push(frame.into_geometry());
         }

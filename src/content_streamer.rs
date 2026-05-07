@@ -361,6 +361,7 @@ impl ContentStreamer {
                 y: screen_y as i32,
                 str: s.to_string(),
                 size: size,
+                font: self.get_font().clone(),
             }));
             let new_x = self.text_x() + self.char_width(s) as f64 * text_x_scale as f64;
             self.set_x(new_x);
