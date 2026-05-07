@@ -5,6 +5,7 @@ pub enum Message {
     DrawBlock(Vec<Message>),
     DrawGlyph(GlyphInfo),
     Noop,
+    Zoom(f32),
 }
 
 #[derive(Clone, Debug)]

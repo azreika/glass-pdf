@@ -1,3 +1,4 @@
+use iced::widget::Action;
 use iced::{Color, Element, Task};
 use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
@@ -44,6 +45,9 @@ impl Viewer {
             Message::DrawGlyph(info) => {
                 self.glyphs.push(info);
             },
+            Message::Zoom(x) => {
+
+            },
             Message::Noop => panic!("Noops should have been filtered out"),
         }
     }
@@ -63,21 +67,32 @@ impl Viewer {
 struct Page {
     padding_x: f32,
     padding_y: f32,
-    glyphs: Vec<GlyphInfo>
+    glyphs: Vec<GlyphInfo>,
 }
 
-impl <Message> canvas::Program<Message> for Page {
-    type State = ();
+struct PageState {
+    scale: f32,
+}
+
+impl Default for PageState {
+    fn default() -> Self {
+        return PageState {
+            scale: 1.0,
+        }
+    }
+}
+
+impl <Msg> canvas::Program<Msg> for Page {
+    type State = PageState;
 
     fn draw(
         &self,
-        _state: &Self::State,
+        state: &PageState,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: iced::Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
-
         // TODO: these shouldnt be constants
         let page_width = 612.0;
         let page_height = 792.0;
@@ -94,11 +109,11 @@ impl <Message> canvas::Program<Message> for Page {
         // inner rectangle
         let mut f2 = Frame::new(renderer, bounds.size());
         let inner_size = iced::Size {
-            width: page_width,
-            height: page_height,
+            width: page_width * state.scale,
+            height: page_height * state.scale,
         };
 
-        let inner_rect = canvas::Path::rectangle(Point { x: self.padding_x, y: self.padding_y}, inner_size);
+        let inner_rect = canvas::Path::rectangle(Point { x: self.padding_x * state.scale, y: self.padding_y * state.scale}, inner_size);
         f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
         geom.push(f2.into_geometry());
 
@@ -131,16 +146,46 @@ impl <Message> canvas::Program<Message> for Page {
 
             let x_pos = self.padding_x + info.x as f32;
 
+            let screen_x = x_pos * state.scale;
+            let screen_y = y_pos * state.scale;
+
             frame.draw_image(iced::Rectangle {
-                x: x_pos,
-                y: y_pos,
-                width: (metrics.width as f32)/scale_factor,
-                height: (metrics.height as f32)/scale_factor,
+                x: screen_x,
+                y: screen_y,
+                width: (metrics.width as f32)/scale_factor * state.scale,
+                height: (metrics.height as f32)/scale_factor * state.scale,
             }, &handle);
 
             geom.push(frame.into_geometry());
         }
 
         return geom;
+    }
+
+
+    fn update(
+        &self,
+        state: &mut PageState,
+        event: &iced::Event,
+        _bounds: iced::Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Option<iced::widget::Action<Msg>> {
+        match event {
+            iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta }) => {
+                match delta {
+                    iced::mouse::ScrollDelta::Lines { y, .. }
+                    | iced::mouse::ScrollDelta::Pixels { y, .. } => {
+                        if *y == 0.0 {
+                            return None;
+                        }
+                        state.scale *= 1.0 + y * 0.02;
+                        state.scale = state.scale.clamp(0.1, 10.0);
+                        return Some(Action::request_redraw());
+                    },
+                }
+            }
+            _ => {}
+        }
+        return None;
     }
 }
