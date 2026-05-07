@@ -90,8 +90,11 @@ impl <Message> canvas::Program<Message> for Page {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
 
+        // TODO: these shouldnt be constants
         let page_width = 612.0;
         let page_height = 792.0;
+        let scale_factor = 2.0;
+
         let mut geom: Vec<Geometry> = vec![];
 
         // outer rectangle
@@ -121,7 +124,7 @@ impl <Message> canvas::Program<Message> for Page {
                 info.str.chars().nth(0).unwrap()
             };
 
-            let (metrics, bitmap) = info.font.ttf.rasterize(cc, info.size);
+            let (metrics, bitmap) = info.font.ttf.rasterize(cc, info.size*scale_factor);
             if metrics.width == 0 || metrics.height == 0 {
                 continue;
             }
@@ -135,13 +138,15 @@ impl <Message> canvas::Program<Message> for Page {
 
             let mut y_pos = page_height as f32;
             y_pos -= info.y as f32 + self.padding_y;
-            y_pos -= metrics.height as f32 + metrics.ymin as f32;
+            y_pos -= (metrics.height as f32 + metrics.ymin as f32)/scale_factor;
+
+            let x_pos = self.padding_x + info.x as f32;
 
             frame.draw_image(iced::Rectangle {
-                x: self.padding_x + info.x as f32,
+                x: x_pos,
                 y: y_pos,
-                width: metrics.width as f32,
-                height: metrics.height as f32,
+                width: (metrics.width as f32)/scale_factor,
+                height: (metrics.height as f32)/scale_factor,
             }, &handle);
 
             geom.push(frame.into_geometry());
