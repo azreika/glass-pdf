@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use iced::{Color, Element, Task};
 use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
@@ -18,7 +16,7 @@ pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
         move || {
             let stream = ContentStreamer::stream_content(flib.clone(), toks.clone());
             let task = Task::stream(stream);
-            (Viewer { output: HashMap::new(), glyphs: vec![]}, task)
+            (Viewer { glyphs: vec![] }, task)
         },
         Viewer::update,
         Viewer::view
@@ -32,7 +30,6 @@ pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {
 }
 
 struct Viewer {
-    output: HashMap<i32, TextInfo>,
     glyphs: Vec<GlyphInfo>,
 }
 
@@ -55,7 +52,6 @@ impl Viewer {
         return Canvas::new(Page {
             padding_x: 40.0,
             padding_y: 20.0,
-            output: self.output.clone(),
             glyphs: self.glyphs.clone(),
         })
             .width(Length::Fill)
@@ -74,7 +70,6 @@ struct TextInfo {
 struct Page {
     padding_x: f32,
     padding_y: f32,
-    output: HashMap<i32, TextInfo>,
     glyphs: Vec<GlyphInfo>
 }
 
