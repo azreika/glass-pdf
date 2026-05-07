@@ -350,13 +350,10 @@ impl ContentStreamer {
     fn char_width(&self, c: u8) -> f64 {
         let font = self.get_font();
         let width = font.get_width(c) as f64;
-        let size = self.text_state.size.unwrap();
-        return (width * size) / 1000.0;
+        return width / 1000.0;
     }
 
     fn mk_message(&mut self, bytes: Vec<u8>) -> Message {
-        let text_x_scale = self.text_state.matrix[0] as f32;
-
         let mut messages = vec![];
 
         let (result, real_encoding, any_malformed) = MACINTOSH.decode(&bytes);
@@ -372,6 +369,7 @@ impl ContentStreamer {
             let effective = multiply_3d(&self.text_state.matrix, ctm);
             let screen_x = effective[6];
             let screen_y = effective[7];
+            let text_x_scale = effective[0];
 
             let size = self.curr_size() * effective[4].abs() as f32;
             messages.push(Message::DrawGlyph(GlyphInfo{
@@ -381,7 +379,9 @@ impl ContentStreamer {
                 size: size,
                 font: self.get_font().clone(),
             }));
-            let new_x = self.text_x() + self.char_width(*byte) as f64 * text_x_scale as f64;
+
+            let cwidth = self.char_width(*byte) * text_x_scale;
+            let new_x = self.text_x() + cwidth as f64;
             self.set_x(new_x);
         }
         return self.mk_message_block(messages);
