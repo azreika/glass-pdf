@@ -29,6 +29,15 @@ pub enum ContentToken {
     RBracket,
     Null,
     StringBytes(Vec<u8>),
+    MKeyword,
+    LKeyword,
+    HKeyword,
+    VKeyword,
+    YKeyword,
+    CKeyword,
+    AngleOpen,
+    AngleClose,
+    MarkedContentKeyword,
 }
 
 struct ContentTokenizer {
@@ -57,6 +66,15 @@ impl Tokenizer<ContentToken> for ContentTokenizer {
             "]" => ContentToken::RBracket,
             "TJ" => ContentToken::TJKeyword,
             "re" => ContentToken::RectKeyword,
+            "m" => ContentToken::MKeyword,
+            "l" => ContentToken::LKeyword,
+            "h" => ContentToken::HKeyword,
+            "v" => ContentToken::VKeyword,
+            "c" => ContentToken::CKeyword,
+            "y" => ContentToken::YKeyword,
+            "<" => ContentToken::AngleOpen,
+            ">" => ContentToken::AngleClose,
+            "BDC" | "EMC" => ContentToken::MarkedContentKeyword,
             _ => {
                 println!("missed word: `{}`", word);
                 panic!();

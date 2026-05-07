@@ -27,6 +27,7 @@ pub enum Value {
     Dict(HashMap<String,Value>),
     Vector(Vec<Value>),
     Identifier(String),
+    Boolean(bool),
 }
 
 impl Value {
@@ -57,6 +58,15 @@ impl Value {
         match self {
             Value::Dict(map) => {
                 return map.get(key).unwrap();
+            }
+            _ => panic!("expected dict, got {}", key),
+        }
+    }
+
+    pub fn try_get(&self, key: &str) -> Option<&Value> {
+        match self {
+            Value::Dict(map) => {
+                return map.get(key);
             }
             _ => panic!("expected dict, got {}", key),
         }
@@ -176,9 +186,21 @@ impl Pdf {
             let obj_info = obj.deref(&self);
             assert_eq!(obj_info.get("Type").get_string(), "Font");
             let descriptor = obj_info.get("FontDescriptor").deref(&self);
-            let widths = obj_info.get("Widths").deref(&self);
+            let widths_ref = obj_info.get("Widths");
+            let widths = if Value::is_obj_ref(widths_ref) {
+                widths_ref.deref(&self)
+            } else {
+                widths_ref
+            };
 
-            assert_eq!(obj_info.get("Encoding").get_string(), "MacRomanEncoding".to_string());
+            println!("CHECKING!!! {:?}", obj_info);
+            let maybe_enc = obj_info.try_get("Encoding");
+            let encoding = if let Some(enc) = maybe_enc {
+                assert_eq!(enc.get_string(), "MacRomanEncoding".to_string());
+                Some(enc.get_string())
+            } else {
+                None
+            };
 
             let subtype = obj_info.get("Subtype").get_string();
             assert_eq!(subtype, "TrueType");
@@ -207,6 +229,7 @@ impl Pdf {
                 first_char: obj_info.get("FirstChar").to_num() as u32,
                 ttf: ff,
                 font_bytes: bb,
+                encoding,
             };
             id_to_font.insert(id.to_string(), font);
 
@@ -254,7 +277,10 @@ impl fmt::Display for Value {
             },
             Value::Identifier(id) => {
                 write!(f, "\"{id}\"")
-            }
+            },
+            Value::Boolean(x) => {
+                write!(f, "{x}")
+            },
         }
     }
 }

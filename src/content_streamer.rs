@@ -172,7 +172,12 @@ impl ContentStreamer {
             matches!(tok, ContentToken::EndCsStroke) ||
             matches!(tok, ContentToken::Fill) ||
             matches!(tok, ContentToken::IKeyword) ||
-            matches!(tok, ContentToken::CmStroke)
+            matches!(tok, ContentToken::CmStroke) ||
+            matches!(tok, ContentToken::MKeyword) ||
+            matches!(tok, ContentToken::HKeyword) ||
+            matches!(tok, ContentToken::LKeyword) ||
+            matches!(tok, ContentToken::VKeyword) ||
+            matches!(tok, ContentToken::YKeyword)
             ;
     }
 
@@ -233,7 +238,25 @@ impl ContentStreamer {
                 let result = multiply_3d(self.curr_ctm(), &mat);
                 self.graphics_state.ctm = result;
                 return Message::Noop;
-            }
+            },
+            ContentToken::MKeyword | ContentToken::LKeyword => {
+                let _y = self.pop_number();
+                let _x = self.pop_number();
+                println!("TODO: implement M and L keyword");
+                return Message::Noop;
+            },
+            ContentToken::VKeyword | ContentToken::YKeyword => {
+                let _x1 = self.pop_number();
+                let _x2 = self.pop_number();
+                let _x3 = self.pop_number();
+                let _x4 = self.pop_number();
+                println!("TODO: implement V and Y keyword");
+                return Message::Noop;
+            },
+            ContentToken::HKeyword => {
+                println!("TODO: implement H keyword");
+                return Message::Noop;
+            },
             _ => panic!(),
         }
     }

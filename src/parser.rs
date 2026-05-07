@@ -317,6 +317,9 @@ impl Parser<'_> {
             let tok = self.eat_next_token();
             assert!(is_identifier(&tok));
             return Value::Identifier(get_id(&tok));
+        } else if self.peek() == PdfToken::BooleanTrue {
+            self.eat_next_token();
+            return Value::Boolean(true);
         } else {
             println!("Unexpected value: {:?}", self.peek());
             panic!();
