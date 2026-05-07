@@ -1,7 +1,6 @@
 use iced::futures::stream;
-use iced::widget::text_editor::Content;
 use crate::content_tokenizer::ContentToken;
-use crate::ast::{Font, FontLib};
+use crate::fonts::{Font, FontLib};
 
 use crate::viewer_message::{GlyphInfo, Message, State};
 

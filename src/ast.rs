@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use flate2::read::ZlibDecoder;
 use std::io::prelude::*;
 
+use crate::fonts::{FontLib, Font};
+
 #[derive(Debug)]
 pub enum Block {
     Object {
@@ -142,17 +144,6 @@ pub struct Pdf {
     pub blocks: Vec<Block>,
 }
 
-#[derive(Clone, Debug)]
-pub struct FontLib {
-    pub id_to_font: HashMap<String, Font>,
-}
-
-impl FontLib {
-    pub fn get_font(&self, font_id: String) -> &Font {
-        return self.id_to_font.get(&font_id).unwrap();
-    }
-}
-
 impl Pdf {
     pub fn get_trailer_dict(&self) -> &HashMap<String,Value> {
         for block in self.blocks.iter() {
@@ -207,7 +198,6 @@ impl Pdf {
 
                 assert_eq!(raw_name, inner_name);
             }
-
             let font = Font {
                 id: id.to_string(),
                 name: inner_name,
@@ -221,24 +211,6 @@ impl Pdf {
         return FontLib {
             id_to_font,
         };
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Font {
-    id: String,
-    pub name: String,
-    widths: Vec<u32>,
-    first_char: u32,
-    pub ttf: fontdue::Font,
-    pub font_bytes: Vec<u8>,
-}
-
-impl Font {
-    pub fn get_width(&self, c: char) -> u32 {
-        let bb = c as u32;
-        let pos = bb - self.first_char;
-        return self.widths[pos as usize];
     }
 }
 

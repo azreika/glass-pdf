@@ -1,4 +1,4 @@
-use crate::ast::Font;
+use crate::fonts::Font;
 
 #[derive(Clone, Debug)]
 pub enum Message {

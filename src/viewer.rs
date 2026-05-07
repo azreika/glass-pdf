@@ -7,7 +7,7 @@ use iced::{Length, Point, Renderer, Theme};
 
 use crate::content_tokenizer::ContentToken;
 use crate::content_streamer::ContentStreamer;
-use crate::ast::FontLib;
+use crate::fonts::FontLib;
 use crate::viewer_message::{Message,GlyphInfo};
 
 pub fn view_contents(font_lib: &FontLib, tokens: &Vec<ContentToken>) {

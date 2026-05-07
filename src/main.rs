@@ -9,6 +9,7 @@ mod content_tokenizer;
 mod content_streamer;
 mod viewer_message;
 mod src_loc;
+mod fonts;
 
 use crate::pdf_tokenizer::{tokenize_pdf};
 use crate::parser::{parse_tokens};
