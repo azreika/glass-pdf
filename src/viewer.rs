@@ -60,13 +60,6 @@ impl Viewer {
     }
 }
 
-#[derive(Clone, Debug)]
-struct TextInfo {
-    x: i32,
-    txt: String,
-    size: f32,
-}
-
 struct Page {
     padding_x: f32,
     padding_y: f32,

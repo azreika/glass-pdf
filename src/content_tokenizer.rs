@@ -140,7 +140,6 @@ impl ContentTokenizer {
                             _   => bytes.push(mm),
                         }
                     }
-                    println!("Making string bytes: {:?}", bytes);
                     self.push_token(ContentToken::StringBytes(bytes));
                     self.push_token(ContentToken::RParens);
                 }
