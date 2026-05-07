@@ -5,15 +5,14 @@ pub enum Message {
     DrawBlock(Vec<Message>),
     DrawGlyph(GlyphInfo),
     Noop,
-    Zoom(f32),
 }
 
 #[derive(Clone, Debug)]
 pub struct GlyphInfo {
-    pub x: i32,
-    pub y: i32,
+    pub x: f64,
+    pub y: f64,
     pub byte: u8,
-    pub size: f32,
+    pub size: f64,
     pub font: Font,
 }
 

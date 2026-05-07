@@ -332,10 +332,10 @@ impl ContentStreamer {
         };
     }
 
-    fn curr_size(&self) -> f32 {
+    fn curr_size(&self) -> f64 {
         let mm = self.text_state.size;
         return match mm {
-            Some(vv) => vv as f32,
+            Some(vv) => vv,
             _ => 16.0,
         };
     }
@@ -365,16 +365,15 @@ impl ContentStreamer {
         assert_eq!(chars.len(), bytes.len());
 
         for byte in bytes.iter() {
-            let ctm = self.curr_ctm();
-            let effective = multiply_3d(&self.text_state.matrix, ctm);
+            let effective = self.get_effective_ctm();
             let screen_x = effective[6];
             let screen_y = effective[7];
             let text_x_scale = effective[0];
 
-            let size = self.curr_size() * effective[4].abs() as f32;
+            let size = self.curr_size() * effective[4].abs();
             messages.push(Message::DrawGlyph(GlyphInfo{
-                x: screen_x as i32,
-                y: screen_y as i32,
+                x: screen_x,
+                y: screen_y,
                 byte: *byte,
                 size: size,
                 font: self.get_font().clone(),
@@ -441,8 +440,17 @@ impl ContentStreamer {
     fn set_x(&mut self, x: f64) {
         self.text_state.matrix[6] = x;
     }
+
     fn move_x(&mut self, x: f64) {
-        self.text_state.matrix[6] -= (x * self.text_state.size.unwrap())/1000.0;
+        let effective = self.get_effective_ctm();
+        let x_scale = effective[0];
+        self.text_state.matrix[6] -= (x * x_scale) / 1000.0;
+    }
+
+    fn get_effective_ctm(&self) -> Vec<f64> {
+        let ctm = self.curr_ctm().clone();
+        let effective = multiply_3d(&self.text_state.matrix, &ctm);
+        return effective;
     }
 
     fn parse_value(&mut self) -> Value {

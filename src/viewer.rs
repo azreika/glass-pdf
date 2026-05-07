@@ -45,9 +45,6 @@ impl Viewer {
             Message::DrawGlyph(info) => {
                 self.glyphs.push(info);
             },
-            Message::Zoom(x) => {
-
-            },
             Message::Noop => panic!("Noops should have been filtered out"),
         }
     }
@@ -65,13 +62,13 @@ impl Viewer {
 }
 
 struct Page {
-    padding_x: f32,
-    padding_y: f32,
+    padding_x: f64,
+    padding_y: f64,
     glyphs: Vec<GlyphInfo>,
 }
 
 struct PageState {
-    scale: f32,
+    scale: f64,
 }
 
 impl Default for PageState {
@@ -109,11 +106,11 @@ impl <Msg> canvas::Program<Msg> for Page {
         // inner rectangle
         let mut f2 = Frame::new(renderer, bounds.size());
         let inner_size = iced::Size {
-            width: page_width * state.scale,
-            height: page_height * state.scale,
+            width: (page_width * state.scale) as f32,
+            height: (page_height * state.scale) as f32,
         };
 
-        let inner_rect = canvas::Path::rectangle(Point { x: self.padding_x * state.scale, y: self.padding_y * state.scale}, inner_size);
+        let inner_rect = canvas::Path::rectangle(Point { x: (self.padding_x * state.scale) as f32, y: (self.padding_y * state.scale) as f32}, inner_size);
         f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
         geom.push(f2.into_geometry());
 
@@ -128,7 +125,7 @@ impl <Msg> canvas::Program<Msg> for Page {
                 println!("HUH MISSING!?!? {}", cc);
             }
 
-            let (metrics, bitmap) = info.font.ttf.rasterize_indexed(glyph_id, info.size*scale_factor);
+            let (metrics, bitmap) = info.font.ttf.rasterize_indexed(glyph_id, (info.size*scale_factor) as f32);
             if metrics.width == 0 || metrics.height == 0 {
                 continue;
             }
@@ -140,20 +137,20 @@ impl <Msg> canvas::Program<Msg> for Page {
                 rgba,
             );
 
-            let mut y_pos = page_height as f32;
-            y_pos -= info.y as f32 + self.padding_y;
-            y_pos -= (metrics.height as f32 + metrics.ymin as f32)/scale_factor;
+            let mut y_pos = page_height;
+            y_pos -= info.y + self.padding_y;
+            y_pos -= (metrics.height as i32 + metrics.ymin) as f64/scale_factor;
 
-            let x_pos = self.padding_x + info.x as f32;
+            let x_pos = self.padding_x + info.x;
 
             let screen_x = x_pos * state.scale;
             let screen_y = y_pos * state.scale;
 
             frame.draw_image(iced::Rectangle {
-                x: screen_x,
-                y: screen_y,
-                width: (metrics.width as f32)/scale_factor * state.scale,
-                height: (metrics.height as f32)/scale_factor * state.scale,
+                x: screen_x as f32,
+                y: screen_y as f32,
+                width: ((metrics.width as f64)/scale_factor * state.scale) as f32,
+                height: ((metrics.height as f64)/scale_factor * state.scale) as f32,
             }, &handle);
 
             geom.push(frame.into_geometry());
@@ -178,7 +175,7 @@ impl <Msg> canvas::Program<Msg> for Page {
                         if *y == 0.0 {
                             return None;
                         }
-                        state.scale *= 1.0 + y * 0.02;
+                        state.scale *= 1.0 + *y as f64 * 0.02;
                         state.scale = state.scale.clamp(0.1, 10.0);
                         return Some(Action::request_redraw());
                     },
