@@ -135,12 +135,8 @@ impl <Msg> canvas::Program<Msg> for Page {
 
         for info in self.glyphs.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
-
             let cc = info.byte;
-
             let font = self.ctx.font_lib.get_font(&info.font_id);
-
-
             let glyph_id = font.ttf.lookup_glyph_index(cc as char);
             assert_ne!(glyph_id, 0);
 
