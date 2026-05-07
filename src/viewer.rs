@@ -112,10 +112,9 @@ impl <Message> canvas::Program<Message> for Page {
         for info in self.glyphs.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
 
-            assert_eq!(info.str.chars().count(), 1);
-            let cc = info.str.chars().next().unwrap();
+            let cc = info.byte;
 
-            let glyph_id = info.font.ttf.lookup_glyph_index(cc);
+            let glyph_id = info.font.ttf.lookup_glyph_index(cc as char);
             if glyph_id == 0 {
                 // glyph not found, skip or use replacement
                 println!("HUH MISSING!?!? {}", cc);

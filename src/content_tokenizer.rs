@@ -140,6 +140,7 @@ impl ContentTokenizer {
                             _   => bytes.push(mm),
                         }
                     }
+                    println!("Making string bytes: {:?}", bytes);
                     self.push_token(ContentToken::StringBytes(bytes));
                     self.push_token(ContentToken::RParens);
                 }
@@ -148,8 +149,8 @@ impl ContentTokenizer {
     }
 }
 
-pub fn tokenize_stream(str: String) -> Vec<ContentToken> {
-    let bytes = str.as_bytes().into_iter().copied().collect();
+pub fn tokenize_stream(str: Vec<u8>) -> Vec<ContentToken> {
+    let bytes = str.iter().copied().collect();
     let mut tokenizer = ContentTokenizer::new(bytes);
     tokenizer.run();
     return tokenizer.tokens;

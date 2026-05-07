@@ -360,7 +360,6 @@ impl ContentStreamer {
         let mut messages = vec![];
 
         let (result, real_encoding, any_malformed) = MACINTOSH.decode(&bytes);
-        println!("BYTES: {:?}", bytes);
         assert_eq!(real_encoding, MACINTOSH);
         assert!(!any_malformed);
         let decoded = result.into_owned();
@@ -368,7 +367,7 @@ impl ContentStreamer {
 
         assert_eq!(chars.len(), bytes.len());
 
-        for (byte, unicode_char) in bytes.iter().zip(chars.iter()) {
+        for byte in bytes.iter() {
             let ctm = self.curr_ctm();
             let effective = multiply_3d(&self.text_state.matrix, ctm);
             let screen_x = effective[6];
@@ -378,11 +377,10 @@ impl ContentStreamer {
             messages.push(Message::DrawGlyph(GlyphInfo{
                 x: screen_x as i32,
                 y: screen_y as i32,
-                str: unicode_char.to_string(),
+                byte: *byte,
                 size: size,
                 font: self.get_font().clone(),
             }));
-            println!("{:?}", unicode_char.to_string());
             let new_x = self.text_x() + self.char_width(*byte) as f64 * text_x_scale as f64;
             self.set_x(new_x);
         }

@@ -11,7 +11,7 @@ pub enum Message {
 pub struct GlyphInfo {
     pub x: i32,
     pub y: i32,
-    pub str: String,
+    pub byte: u8,
     pub size: f32,
     pub font: Font,
 }
