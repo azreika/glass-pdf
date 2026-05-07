@@ -1,6 +1,5 @@
 use iced::widget::Action;
-use iced::window::{oldest, raw_id, scale_factor};
-use iced::{Color, Element, Program, Task};
+use iced::{Color, Element, Task};
 use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
