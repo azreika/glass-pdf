@@ -100,7 +100,7 @@ impl <Message> canvas::Program<Message> for Page {
         // outer rectangle
         let mut f1 = Frame::new(renderer, bounds.size());
         let outer_rect = canvas::Path::rectangle(Point { x: 0.0, y: 0.0 }, bounds.size());
-        f1.fill(&outer_rect, Color::from_rgb(0.2, 0.5, 1.0));
+        f1.fill(&outer_rect, Color::from_rgb(0.8, 0.8, 0.8));
         geom.push(f1.into_geometry());
 
         // inner rectangle
