@@ -10,6 +10,7 @@ mod content_streamer;
 mod viewer_message;
 mod src_loc;
 mod fonts;
+mod transform;
 
 use crate::pdf_tokenizer::{tokenize_pdf};
 use crate::parser::{parse_tokens};
@@ -37,8 +38,8 @@ fn main() {
     assert_eq!(vec.len(), 1);
     let page = ast.get_object(&vec[0]);
     println!("Page: {}", page);
-    let contents = page.get("Contents").deref(&ast);
 
+    let contents = page.get("Contents").deref(&ast);
     let resources = page.get("Resources").deref(&ast);
     println!("Resources:\n{}", resources);
     let fonts = resources.get("Font");

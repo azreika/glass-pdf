@@ -1,13 +1,12 @@
-use encoding_rs::MACINTOSH;
 use iced::futures::stream;
 use crate::content_tokenizer::ContentToken;
 use crate::fonts::{Font, FontLib};
 
 use crate::viewer_message::{GlyphInfo, Message, State};
+use crate::transform::{Matrix, multiply_3d};
 
 struct TextState {
-    matrix: Vec<f64>,
-    line_matrix: Vec<f64>,
+    matrix: Matrix,
     font: Option<String>,
     size: Option<f64>,
 }
@@ -22,32 +21,7 @@ enum Value {
 
 #[derive(Clone,Debug)]
 struct GraphicsState {
-    ctm: Vec<f64>,
-}
-
-fn multiply_3d(v1: &Vec<f64>, v2: &Vec<f64>) -> Vec<f64> {
-    let mut result = vec![0.0; 9];
-    assert_eq!(v1.len(), 9);
-    assert_eq!(v2.len(), 9);
-
-    for row in 0..3 {
-        for col in 0..3 {
-            for k in 0..3 {
-                result[row*3 + col] += v1[row*3 + k] * v2[k*3 + col];
-            }
-        }
-    }
-    return result;
-}
-
-fn matrix_to_3d(v: &Vec<f64>) -> Vec<f64> {
-    assert_eq!(v.len(), 6);
-    let result = vec![
-        v[0], v[1], 0.0,
-        v[2], v[3], 0.0,
-        v[4], v[5], 1.0,
-    ];
-    return result;
+    ctm: Matrix,
 }
 
 impl GraphicsState {
@@ -61,7 +35,7 @@ impl GraphicsState {
 
     fn new() -> Self {
         return GraphicsState {
-            ctm: Self::init_matrix(),
+            ctm: Matrix::new(),
         };
     }
 
@@ -77,27 +51,10 @@ impl TextState {
 
     fn new() -> Self {
         return TextState {
-            matrix: Self::init_matrix(),
-            line_matrix: Self::init_matrix(),
+            matrix: Matrix::new(),
             font: None,
             size: None,
         };
-    }
-
-    fn matrix_to_3d(v: &Vec<f64>) -> Vec<f64> {
-        assert_eq!(v.len(), 6);
-        let result = vec![
-            v[0], v[1], 0.0,
-            v[2], v[3], 0.0,
-            v[4], v[5], 1.0,
-        ];
-        return result;
-    }
-
-    fn set_matrices(&mut self, v: &Vec<f64>) {
-        let expected_matrix = Self::matrix_to_3d(v);
-        self.matrix = expected_matrix.clone();
-        self.line_matrix = expected_matrix.clone();
     }
 }
 
@@ -243,10 +200,10 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             ContentToken::RectKeyword => {
-                let height = self.pop_number();
-                let width = self.pop_number();
-                let y = self.pop_number();
-                let x = self.pop_number();
+                let _height = self.pop_number();
+                let _width = self.pop_number();
+                let _y = self.pop_number();
+                let _x = self.pop_number();
                 println!("TODO: implement rectangle thing");
                 return Message::Noop;
             },
@@ -261,12 +218,12 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             ContentToken::CsStroke => {
-                let cs = self.pop_string();
+                let _cs = self.pop_string();
                 println!("TODO: implement colour space operator cs");
                 return Message::Noop;
             },
             ContentToken::EndCsStroke => {
-                let sc = self.pop_number();
+                let _sc = self.pop_number();
                 println!("TODO: implement colour space operator sc");
                 return Message::Noop;
             },
@@ -276,7 +233,7 @@ impl ContentStreamer {
             },
             ContentToken::IKeyword => {
                 println!("TODO: implement colour space operator flatness I");
-                let flatness = self.pop_number();
+                let _flatness = self.pop_number();
                 return Message::Noop;
             },
             ContentToken::CmStroke => {
@@ -286,7 +243,7 @@ impl ContentStreamer {
                 }
                 mat.reverse();
 
-                let mat = matrix_to_3d(&mat);
+                let mat = Matrix::vec6_to_matrix(&mat);
                 let result = multiply_3d(self.curr_ctm(), &mat);
                 self.graphics_state.ctm = result;
                 return Message::Noop;
@@ -295,12 +252,12 @@ impl ContentStreamer {
         }
     }
 
-    fn curr_ctm(&self) -> &Vec<f64> {
+    fn curr_ctm(&self) -> &Matrix {
         return &self.graphics_state.ctm;
     }
 
     fn text_x(&self) -> f64 {
-        return self.text_state.matrix[6];
+        return self.text_state.matrix.x();
     }
 
     fn pop_number(&mut self) -> f64 {
@@ -356,30 +313,22 @@ impl ContentStreamer {
     fn mk_message(&mut self, bytes: Vec<u8>) -> Message {
         let mut messages = vec![];
 
-        let (result, real_encoding, any_malformed) = MACINTOSH.decode(&bytes);
-        assert_eq!(real_encoding, MACINTOSH);
-        assert!(!any_malformed);
-        let decoded = result.into_owned();
-        let chars: Vec<char> = decoded.chars().collect();
-
-        assert_eq!(chars.len(), bytes.len());
-
-        for byte in bytes.iter() {
+        for &byte in bytes.iter() {
             let effective = self.get_effective_ctm();
-            let screen_x = effective[6];
-            let screen_y = effective[7];
-            let text_x_scale = effective[0];
+            let screen_x = effective.x();
+            let screen_y = effective.y();
+            let x_scale = effective.x_scale();
 
-            let size = self.curr_size() * effective[4].abs();
+            let size = self.curr_size() * effective.y_scale().abs();
             messages.push(Message::DrawGlyph(GlyphInfo{
                 x: screen_x,
                 y: screen_y,
-                byte: *byte,
+                byte: byte,
                 size: size,
                 font: self.get_font().clone(),
             }));
 
-            let cwidth = self.char_width(*byte) * text_x_scale;
+            let cwidth = self.char_width(byte) * x_scale;
             let new_x = self.text_x() + cwidth as f64;
             self.set_x(new_x);
         }
@@ -399,7 +348,7 @@ impl ContentStreamer {
                     mat.push(self.pop_number());
                 }
                 mat.reverse();
-                self.text_state.set_matrices(&mat);
+                self.text_state.matrix = Matrix::vec6_to_matrix(&mat);
                 return Message::Noop;
             },
             ContentToken::TfKeyword => {
@@ -438,19 +387,21 @@ impl ContentStreamer {
     }
 
     fn set_x(&mut self, x: f64) {
-        self.text_state.matrix[6] = x;
+        self.text_state.matrix.set_x(x);
     }
 
     fn move_x(&mut self, x: f64) {
         let effective = self.get_effective_ctm();
-        let x_scale = effective[0];
-        self.text_state.matrix[6] -= (x * x_scale) / 1000.0;
+        let x_scale = effective.x_scale();
+        let old_x = self.text_state.matrix.x();
+        self.text_state.matrix.set_x(
+            old_x - (x * x_scale)/1000.0
+        );
     }
 
-    fn get_effective_ctm(&self) -> Vec<f64> {
-        let ctm = self.curr_ctm().clone();
-        let effective = multiply_3d(&self.text_state.matrix, &ctm);
-        return effective;
+    fn get_effective_ctm(&self) -> Matrix {
+        let ctm = self.curr_ctm();
+        return multiply_3d(&self.text_state.matrix, &ctm);
     }
 
     fn parse_value(&mut self) -> Value {
