@@ -113,15 +113,40 @@ impl <Message> canvas::Program<Message> for Page {
 
         for info in self.glyphs.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
-            let mut txt = canvas::Text::from(
-                info.str.clone()
+
+            let cc = if info.str.len() != 1 {
+                println!("unhandled info glyph?? {} {:?}", info.str.len(), info.str);
+                '?'
+            } else {
+                info.str.chars().nth(0).unwrap()
+            };
+
+            let (metrics, bitmap) = info.font.ttf.rasterize(cc, info.size);
+            if metrics.width == 0 || metrics.height == 0 {
+                continue;
+            }
+
+            let rgba: Vec<u8> = bitmap.iter().flat_map(|&a| [0,0,0,a]).collect();
+            let handle = iced::widget::image::Handle::from_rgba(
+                metrics.width as u32,
+                metrics.height as u32,
+                rgba,
             );
-            txt.position = Point::new(self.padding_x + info.x as f32, info.y as f32 + self.padding_y);
-            txt.size = info.size.into();
-            let font_name: &'static str = Box::leak(info.font.name.clone().into_boxed_str());
-            txt.font = iced::Font::with_name(&font_name);
-            frame.fill_text(txt);
+
+            let mut y_pos = page_height as f32;
+            y_pos -= info.y as f32 + self.padding_y;
+            y_pos += metrics.height as f32 - metrics.ymin as f32;
+
+            frame.draw_image(iced::Rectangle {
+                x: self.padding_x + info.x as f32,
+                y: y_pos,
+                width: metrics.width as f32,
+                height: metrics.height as f32,
+            }, &handle);
+
             geom.push(frame.into_geometry());
+
+
         }
 
         return geom;

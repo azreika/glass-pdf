@@ -7,5 +7,5 @@ edition = "2024"
 base64 = "0.22.1"
 flate2 = "1.1.9"
 fontdue = "0.9.3"
-iced = { version = "0.14.0", features = ["canvas"] }
+iced = { version = "0.14.0", features = ["canvas", "image"] }
 ttf-parser = "0.25.1"

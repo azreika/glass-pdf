@@ -188,6 +188,8 @@ impl Pdf {
 
             let ff = fontdue::Font::from_bytes(bb.clone(), fontdue::FontSettings::default()).unwrap();
             let face = ttf_parser::Face::parse(&bb, 0).unwrap();
+            println!("{:?}", ff);
+
 
             for name in face.names() {
                 let raw_name = std::str::from_utf8(name.name).unwrap();
@@ -207,6 +209,7 @@ impl Pdf {
                 font_bytes: bb,
             };
             id_to_font.insert(id.to_string(), font);
+
         }
         return FontLib {
             id_to_font,
