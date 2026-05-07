@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use iced::futures::stream;
 use crate::content_tokenizer::ContentToken;
 use crate::fonts::{Font, FontLib};
@@ -17,6 +19,7 @@ enum Value {
     Identifier(String),
     Array(Vec<Box<Value>>),
     StringBytes(Vec<u8>),
+    Dict(HashMap<String,Value>),
 }
 
 #[derive(Clone,Debug)]
@@ -109,16 +112,8 @@ impl ContentStreamer {
                     return msg;
                 }
 
-                let value = match tok {
-                    ContentToken::Number(x) => Value::Number(*x),
-                    ContentToken::Identifier(id) => Value::Identifier(id.to_string()),
-                    _ => {
-                        println!("STACK: {:?}", self.stack);
-                        panic!("Unhandled TopLevel: {:?}", self.peek())
-                    },
-                };
+                let value = self.parse_value();
                 self.stack.push(value);
-                self.offset += 1;
                 return Message::Noop;
             },
             State::InText => {
@@ -177,7 +172,9 @@ impl ContentStreamer {
             matches!(tok, ContentToken::HKeyword) ||
             matches!(tok, ContentToken::LKeyword) ||
             matches!(tok, ContentToken::VKeyword) ||
-            matches!(tok, ContentToken::YKeyword)
+            matches!(tok, ContentToken::YKeyword) ||
+            matches!(tok, ContentToken::EMCKeyword) ||
+            matches!(tok, ContentToken::BMCKeyword)
             ;
     }
 
@@ -257,6 +254,15 @@ impl ContentStreamer {
                 println!("TODO: implement H keyword");
                 return Message::Noop;
             },
+            ContentToken::BMCKeyword => {
+                let _dict = self.pop_dict();
+                println!("TODO: implement BMC keyword");
+                return Message::Noop;
+            }
+            ContentToken::EMCKeyword => {
+                println!("TODO: implement EMC keyword");
+                return Message::Noop;
+            }
             _ => panic!(),
         }
     }
@@ -272,6 +278,13 @@ impl ContentStreamer {
     fn pop_number(&mut self) -> f64 {
         return match self.stack.pop().unwrap() {
             Value::Number(v) => v,
+            other => panic!("expected number, got {:?}", other)
+        };
+    }
+
+    fn pop_dict(&mut self) -> HashMap<String,Value> {
+        return match self.stack.pop().unwrap() {
+            Value::Dict(v) => v.clone(),
             other => panic!("expected number, got {:?}", other)
         };
     }
@@ -419,12 +432,33 @@ impl ContentStreamer {
             ContentToken::LParens => self.parse_parens(),
             ContentToken::LBracket => self.parse_array(),
             ContentToken::StringBytes(bytes) => Value::StringBytes(bytes),
+            ContentToken::AngleOpen => self.parse_dict(),
             _ => panic!("Unexpected token {:?}", tok),
         }
     }
 
     fn peek(&self) -> ContentToken {
         return self.tokens[self.offset].clone();
+    }
+
+    fn parse_dict(&mut self) -> Value {
+        let mut result = HashMap::new();
+        assert!(matches!(self.next_token(), ContentToken::AngleOpen));
+
+        loop {
+            let id_tok = self.next_token();
+            match id_tok {
+                ContentToken::Identifier(id) => {
+                    let value = self.parse_value();
+                    result.insert(id, value);
+                },
+                ContentToken::AngleClose => break,
+                _ => panic!(),
+            }
+        }
+
+        assert!(matches!(self.next_token(), ContentToken::AngleClose));
+        return Value::Dict(result);
     }
 
     fn parse_parens(&mut self) -> Value {

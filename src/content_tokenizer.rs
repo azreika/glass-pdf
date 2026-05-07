@@ -37,7 +37,8 @@ pub enum ContentToken {
     CKeyword,
     AngleOpen,
     AngleClose,
-    MarkedContentKeyword,
+    BMCKeyword,
+    EMCKeyword,
 }
 
 struct ContentTokenizer {
@@ -74,7 +75,8 @@ impl Tokenizer<ContentToken> for ContentTokenizer {
             "y" => ContentToken::YKeyword,
             "<" => ContentToken::AngleOpen,
             ">" => ContentToken::AngleClose,
-            "BDC" | "EMC" => ContentToken::MarkedContentKeyword,
+            "BDC" => ContentToken::BMCKeyword,
+            "EMC" => ContentToken::EMCKeyword,
             _ => {
                 println!("missed word: `{}`", word);
                 panic!();
