@@ -515,3 +515,34 @@ impl ContentStreamer {
         return Value::Array(arr);
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use futures::executor::block_on;
+    use futures::StreamExt;
+
+    fn collect_messages(ctx: PageCtx, tokens: Vec<ContentToken>) -> Vec<Message> {
+        let stream = ContentStreamer::stream_content(ctx, tokens);
+        futures::pin_mut!(stream);
+        let messages: Vec<Message> = block_on(stream.collect());
+        // flatten DrawBlocks
+        let mut flat = vec![];
+        for msg in messages {
+            flatten_message(msg, &mut flat);
+        }
+        return flat;
+    }
+
+    fn flatten_message(msg: Message, out: &mut Vec<Message>) {
+        match msg {
+            Message::DrawBlock(msgs) => {
+                for m in msgs {
+                    flatten_message(m, out);
+                }
+            }
+            other => out.push(other),
+        }
+    }
+}

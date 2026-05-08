@@ -1,6 +1,6 @@
 use crate::tokenizer::Tokenizer;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ContentToken {
     SaveGraphicsState,
     RestoreGraphicsState,
@@ -198,4 +198,37 @@ pub fn tokenize_stream(str: Vec<u8>) -> Vec<ContentToken> {
     let mut tokenizer = ContentTokenizer::new(bytes);
     tokenizer.run();
     return tokenizer.tokens;
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_consts::tests::SAMPLE_PDF_STREAM;
+    use super::*;
+
+    fn run_tokenizer(str: &str) -> Vec<ContentToken> {
+        return tokenize_stream(str.as_bytes().to_vec());
+    }
+
+    #[test]
+    fn simple_seqs() {
+        let actual = run_tokenizer("
+        q Q q Q q Q
+        ");
+        let expected = vec![
+            ContentToken::SaveGraphicsState,
+            ContentToken::RestoreGraphicsState,
+            ContentToken::SaveGraphicsState,
+            ContentToken::RestoreGraphicsState,
+            ContentToken::SaveGraphicsState,
+            ContentToken::RestoreGraphicsState,
+        ];
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn sample_pdf() {
+        // Just check that it doesn't crash
+        run_tokenizer(SAMPLE_PDF_STREAM);
+    }
+
 }

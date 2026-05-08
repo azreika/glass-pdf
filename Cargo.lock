@@ -2736,6 +2736,7 @@ dependencies = [
  "encoding_rs",
  "flate2",
  "fontdue",
+ "futures",
  "iced",
  "ttf-parser 0.25.1",
 ]

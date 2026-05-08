@@ -6,6 +6,7 @@ mod viewer;
 mod content;
 mod viewer_message;
 mod fonts;
+mod test_consts;
 mod transform;
 
 use pdf::tokenizer::{tokenize_pdf};
