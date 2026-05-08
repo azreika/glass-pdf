@@ -33,26 +33,19 @@ fn main() {
 
     let trailer = ast.get_trailer_dict();
     let root_ref = trailer.get("Root").unwrap();
-    println!("Root: {root_ref}");
     let root = ast.get_object(root_ref);
-    println!("{root_ref}: {root}");
     let pages_ref = root.get("Pages");
     let pages = ast.get_object(pages_ref);
-
     let kids = pages.get("Kids");
     let vec = kids.get_vec();
     assert!(vec.len() >= 1);
     let page = ast.get_object(&vec[0]);
-    println!("Page: {}", page);
-
     let contents = page.get("Contents").deref(&ast);
-
     let resource_ref = page.get("Resources");
     let resources = match resource_ref {
         pdf::ast::Value::Reference{ .. } => resource_ref.deref(&ast),
         _ => resource_ref,
     };
-    println!("Resources:\n{}", resources);
     let fonts = resources.get("Font");
     let font_lib = ast.process_fonts(fonts);
 

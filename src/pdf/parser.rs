@@ -114,7 +114,6 @@ impl Parser<'_> {
                             let v2 = self.eat_next_token();
                             assert!(is_num(&v2));
                             let kk = self.eat_next_token();
-                            println!("hii? {:?} {:?} {:?}", kk, v1, v2);
                             assert!(kk == PdfToken::FKeyword || kk == PdfToken::NKeyword);
                             xref.push(SrcLoc::new(offset as usize));
                         }
