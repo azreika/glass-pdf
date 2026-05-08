@@ -519,6 +519,9 @@ impl ContentStreamer {
 #[cfg(test)]
 mod tests {
 
+    use crate::fonts::FontLib;
+    use crate::pdf::ast::ColourSpaceLib;
+
     use super::*;
     use futures::executor::block_on;
     use futures::StreamExt;
@@ -544,5 +547,34 @@ mod tests {
             }
             other => out.push(other),
         }
+    }
+
+    fn dummy_ctx() -> PageCtx {
+        return PageCtx {
+            height: 500.0,
+            width: 500.0,
+            font_lib: FontLib {
+                id_to_font: HashMap::new(),
+            },
+            scale_factor: 1.0,
+            cs_lib: ColourSpaceLib {
+                id_to_cs: HashMap::new(),
+            },
+        };
+    }
+
+    #[test]
+    fn saved_graphics() {
+        let ctx = dummy_ctx();
+        let vv = vec![
+            ContentToken::SaveGraphicsState,
+            ContentToken::RestoreGraphicsState,
+            ContentToken::SaveGraphicsState,
+            ContentToken::RestoreGraphicsState,
+        ];
+        let messages = collect_messages(ctx, vv);
+
+        // Should all be no-ops
+        assert_eq!(messages.len(), 0);
     }
 }

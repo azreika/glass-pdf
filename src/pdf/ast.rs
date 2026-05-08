@@ -30,7 +30,7 @@ pub struct ColourSpace {
 
 #[derive(Debug,Clone)]
 pub struct ColourSpaceLib {
-    id_to_cs: HashMap<String,ColourSpace>,
+    pub id_to_cs: HashMap<String,ColourSpace>,
 }
 
 impl ColourSpaceLib {
