@@ -5,8 +5,7 @@ mod parser;
 mod ast;
 mod viewer;
 mod pdf_tokenizer;
-mod content_tokenizer;
-mod content_streamer;
+mod content;
 mod viewer_message;
 mod src_loc;
 mod fonts;
@@ -14,11 +13,11 @@ mod transform;
 
 use crate::pdf_tokenizer::{tokenize_pdf};
 use crate::parser::{parse_tokens};
-use crate::content_tokenizer::{tokenize_stream};
+use crate::content::tokenizer::{tokenize_stream};
 use crate::viewer::{PageCtx, view_contents};
 
 fn main() {
-    let data: Vec<u8> = fs::read("./examples/NDIS_pricing.pdf").expect("woops");
+    let data: Vec<u8> = fs::read("./examples/pages_pdf.pdf").expect("woops");
     let tokens = tokenize_pdf(&data);
     let ast = parse_tokens(&tokens);
     println!("{}", ast);

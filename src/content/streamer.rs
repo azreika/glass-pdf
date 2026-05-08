@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use iced::futures::stream;
-use crate::content_tokenizer::ContentToken;
+use crate::content::tokenizer::ContentToken;
 use crate::fonts::{Font, FontLib};
 
 use crate::viewer_message::{GlyphInfo, Message, State};
@@ -210,7 +210,7 @@ impl ContentStreamer {
             },
             ContentToken::CsStroke => {
                 let _cs = self.pop_string();
-                println!("TODO: implement colour space operator cs");
+                println!("TODO: implement colour space operator cs {:?}", _cs);
                 return Message::Noop;
             },
             ContentToken::GSKeyword => {

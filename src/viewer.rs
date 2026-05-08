@@ -4,8 +4,8 @@ use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
 
-use crate::content_tokenizer::ContentToken;
-use crate::content_streamer::ContentStreamer;
+use crate::content::tokenizer::ContentToken;
+use crate::content::streamer::ContentStreamer;
 use crate::fonts::FontLib;
 use crate::viewer_message::{Message,GlyphInfo};
 
