@@ -2,7 +2,7 @@ use std::fmt;
 use std::collections::HashMap;
 use flate2::read::ZlibDecoder;
 use std::io::prelude::*;
-use crate::fonts::{FontLib, Font};
+use crate::{fonts::{Font, FontLib}, pdf, viewer::PageCtx};
 
 #[derive(Debug, Copy, Clone)]
 pub struct SrcLoc {
@@ -290,6 +290,35 @@ impl Pdf {
         }
         return FontLib {
             id_to_font,
+        };
+    }
+
+    pub fn mk_page_ctx(&self, page: &Value) -> PageCtx {
+        let resource_ref = page.get("Resources");
+        let resources = match resource_ref {
+            pdf::ast::Value::Reference{ .. } => resource_ref.deref(&self),
+            _ => resource_ref,
+        };
+
+        let fonts = resources.get("Font");
+        let font_lib = self.process_fonts(fonts);
+
+        let cs = resources.get("ColorSpace");
+        let cs_lib = self.process_colour_spaces(cs);
+
+        let media_box = page.get("MediaBox").to_vec_f32();
+        assert_eq!(media_box.len(), 4);
+        assert_eq!(media_box[0], 0.0);
+        assert_eq!(media_box[1], 0.0);
+        let page_width = media_box[2] as f64;
+        let page_height = media_box[3] as f64;
+
+        return PageCtx {
+            height: page_height,
+            width: page_width,
+            font_lib: font_lib,
+            scale_factor: 1.0,
+            cs_lib: cs_lib,
         };
     }
 }

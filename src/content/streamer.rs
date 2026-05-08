@@ -518,63 +518,93 @@ impl ContentStreamer {
 
 #[cfg(test)]
 mod tests {
+use std::fs;
 
-    use crate::fonts::FontLib;
-    use crate::pdf::ast::ColourSpaceLib;
+use crate::content::tokenizer::tokenize_stream;
+use crate::fonts::FontLib;
+use crate::pdf::ast::ColourSpaceLib;
+use crate::pdf::parser::parse_tokens;
+use crate::pdf::tokenizer::tokenize_pdf;
 
-    use super::*;
-    use futures::executor::block_on;
-    use futures::StreamExt;
+use super::*;
+use futures::executor::block_on;
+use futures::StreamExt;
 
-    fn collect_messages(ctx: PageCtx, tokens: Vec<ContentToken>) -> Vec<Message> {
-        let stream = ContentStreamer::stream_content(ctx, tokens);
-        futures::pin_mut!(stream);
-        let messages: Vec<Message> = block_on(stream.collect());
-        // flatten DrawBlocks
-        let mut flat = vec![];
-        for msg in messages {
-            flatten_message(msg, &mut flat);
-        }
-        return flat;
+fn collect_messages(ctx: PageCtx, tokens: Vec<ContentToken>) -> Vec<Message> {
+    let stream = ContentStreamer::stream_content(ctx, tokens);
+    futures::pin_mut!(stream);
+    let messages: Vec<Message> = block_on(stream.collect());
+    // flatten DrawBlocks
+    let mut flat = vec![];
+    for msg in messages {
+        flatten_message(msg, &mut flat);
     }
+    return flat;
+}
 
-    fn flatten_message(msg: Message, out: &mut Vec<Message>) {
-        match msg {
-            Message::DrawBlock(msgs) => {
-                for m in msgs {
-                    flatten_message(m, out);
-                }
+fn flatten_message(msg: Message, out: &mut Vec<Message>) {
+    match msg {
+        Message::DrawBlock(msgs) => {
+            for m in msgs {
+                flatten_message(m, out);
             }
-            other => out.push(other),
         }
+        other => out.push(other),
     }
+}
 
-    fn dummy_ctx() -> PageCtx {
-        return PageCtx {
-            height: 500.0,
-            width: 500.0,
-            font_lib: FontLib {
-                id_to_font: HashMap::new(),
-            },
-            scale_factor: 1.0,
-            cs_lib: ColourSpaceLib {
-                id_to_cs: HashMap::new(),
-            },
-        };
-    }
+fn dummy_ctx() -> PageCtx {
+    return PageCtx {
+        height: 500.0,
+        width: 500.0,
+        font_lib: FontLib {
+            id_to_font: HashMap::new(),
+        },
+        scale_factor: 1.0,
+        cs_lib: ColourSpaceLib {
+            id_to_cs: HashMap::new(),
+        },
+    };
+}
 
-    #[test]
-    fn saved_graphics() {
-        let ctx = dummy_ctx();
-        let vv = vec![
-            ContentToken::SaveGraphicsState,
-            ContentToken::RestoreGraphicsState,
-            ContentToken::SaveGraphicsState,
-            ContentToken::RestoreGraphicsState,
-        ];
-        let messages = collect_messages(ctx, vv);
+#[test]
+fn saved_graphics() {
+    let ctx = dummy_ctx();
+    let vv = vec![
+        ContentToken::SaveGraphicsState,
+        ContentToken::RestoreGraphicsState,
+        ContentToken::SaveGraphicsState,
+        ContentToken::RestoreGraphicsState,
+    ];
+    let messages = collect_messages(ctx, vv);
 
-        // Should all be no-ops
-        assert_eq!(messages.len(), 0);
-    }
+    // Should all be no-ops
+    assert_eq!(messages.len(), 0);
+}
+
+#[test]
+fn sample_pdf() {
+    let data: Vec<u8> = fs::read("./examples/samplepdf.pdf").expect("woops");
+    let tokens = tokenize_pdf(&data);
+    let ast = parse_tokens(&tokens);
+
+    println!("-----------");
+
+    let trailer = ast.get_trailer_dict();
+    let root_ref = trailer.get("Root").unwrap();
+    let root = ast.get_object(root_ref);
+    let pages_ref = root.get("Pages");
+    let pages = ast.get_object(pages_ref);
+    let kids = pages.get("Kids");
+    let vec = kids.get_vec();
+    assert!(vec.len() >= 1);
+
+    let page = ast.get_object(&vec[0]);
+    let contents = page.get("Contents").deref(&ast);
+    let ctx = ast.mk_page_ctx(page);
+    let decoded_contents = contents.decode();
+    let tokenized_contents = tokenize_stream(decoded_contents);
+    let messages = collect_messages(ctx, tokenized_contents);
+    assert!(messages.len() > 0);
+}
 }
