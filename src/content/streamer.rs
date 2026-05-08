@@ -437,7 +437,6 @@ impl ContentStreamer {
         return match tok {
             ContentToken::Identifier(id) => Value::Identifier(id.to_string()),
             ContentToken::Number(x) => Value::Number(x),
-            ContentToken::LParens => self.parse_parens(),
             ContentToken::LBracket => self.parse_array(),
             ContentToken::StringBytes(bytes) => Value::StringBytes(bytes),
             ContentToken::AngleOpen => self.parse_dict(),
@@ -467,12 +466,6 @@ impl ContentStreamer {
 
         assert!(matches!(self.next_token(), ContentToken::AngleClose));
         return Value::Dict(result);
-    }
-
-    fn parse_parens(&mut self) -> Value {
-        let result = self.parse_value();
-        assert!(matches!(self.next_token(), ContentToken::RParens));
-        return result;
     }
 
     fn parse_array(&mut self) -> Value {

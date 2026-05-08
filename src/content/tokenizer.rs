@@ -20,8 +20,6 @@ pub enum ContentToken {
     BTKeyword,
     TmKeyword,
     TfKeyword,
-    LParens,
-    RParens,
     TjKeyword,
     TJKeyword,
     ETKeyword,
@@ -56,7 +54,6 @@ pub enum ContentToken {
 struct ContentTokenizer {
     data: Vec<u8>,
     offset: usize,
-    tokens: Vec<ContentToken>,
 }
 
 impl Tokenizer<ContentToken> for ContentTokenizer {
@@ -72,7 +69,6 @@ impl Tokenizer<ContentToken> for ContentTokenizer {
             "BT" => ContentToken::BTKeyword,
             "Tm" => ContentToken::TmKeyword,
             "Tf" => ContentToken::TfKeyword,
-            "(" => ContentToken::LParens,
             "Tj" => ContentToken::TjKeyword,
             "ET" => ContentToken::ETKeyword,
             "[" => ContentToken::LBracket,
@@ -120,84 +116,79 @@ impl Tokenizer<ContentToken> for ContentTokenizer {
 
 impl ContentTokenizer {
     fn new(data: Vec<u8>) -> Self {
-        return ContentTokenizer { data, offset: 0, tokens: vec![] };
+        return ContentTokenizer { data, offset: 0 };
     }
 
-    fn push_token(&mut self, tok: ContentToken) {
-        self.tokens.push(tok);
+    fn lex_w(&mut self) -> ContentToken {
+        self.eat_char('W');
+        if self.peek() == '*' {
+            self.eat_char('*');
+            return ContentToken::WStarKeyword;
+        } else {
+            return ContentToken::WKeyword;
+        }
     }
 
-    fn run(&mut self) {
-        while self.offset < self.data.len() {
-            let cc = self.peek();
-            if cc.is_whitespace() {
-                self.lex_char();
-            } else if cc == '\0' {
-                self.lex_char();
-                self.push_token(ContentToken::Null);
-            } else if cc == 'q' {
-                self.lex_char();
-                self.push_token(ContentToken::SaveGraphicsState);
-            } else if cc == 'Q' {
-                self.lex_char();
-                self.push_token(ContentToken::RestoreGraphicsState);
-            } else if cc.is_numeric() || cc == '.' || cc == '-' {
-                let num = self.lex_number();
-                self.push_token(ContentToken::Number(num));
-            } else if cc == 'W' {
-                self.eat_char('W');
-                if self.peek() == '*' {
-                    self.eat_char('*');
-                    self.push_token(ContentToken::WStarKeyword);
-                } else {
-                    self.push_token(ContentToken::WKeyword);
-                }
-            } else if cc == 'n' {
-                self.eat_char('n');
-                self.push_token(ContentToken::NKeyword);
-            } else if cc == '/' {
-                self.eat_char('/');
-                let id = self.lex_word();
-                let id_tok = ContentToken::Identifier(id);
-                self.push_token(id_tok);
-            } else {
-                let word = self.lex_word();
-                let tok = self.token_from_word(&word);
-                self.push_token(tok.clone());
+    fn lex_identifier(&mut self) -> ContentToken {
+        let id = self.lex_word();
+        return ContentToken::Identifier(id);
+    }
 
-                if matches!(tok, ContentToken::LParens) {
-                    let mut bytes = vec![];
-                    let mut depth = 1;
-                    while depth > 0 && self.offset < self.data.len() {
-                        let mm = self.lex_u8();
-                        match mm as char {
-                            '\\' => {
-                                bytes.push(mm);
-                                if self.offset < self.data.len() {
-                                    bytes.push(self.lex_u8()); // consume \(, \), \\, \n, etc.
-                                }
-                            },
-                            ')' => {
-                                depth -= 1;
-                                if depth > 0 { bytes.push(mm); }
-                            },
-                            '(' => { depth += 1; bytes.push(mm); },
-                            _   => bytes.push(mm),
-                        }
+    fn lex_string(&mut self) -> ContentToken {
+        let mut bytes = vec![];
+        let mut depth = 1;
+        while depth > 0 && self.offset < self.data.len() {
+            let mm = self.lex_u8();
+            match mm as char {
+                '\\' => {
+                    bytes.push(mm);
+                    if self.offset < self.data.len() {
+                        bytes.push(self.lex_u8()); // consume \(, \), \\, \n, etc.
                     }
-                    self.push_token(ContentToken::StringBytes(bytes));
-                    self.push_token(ContentToken::RParens);
-                }
+                },
+                ')' => {
+                    depth -= 1;
+                    if depth > 0 { bytes.push(mm); }
+                },
+                '(' => { depth += 1; bytes.push(mm); },
+                _   => bytes.push(mm),
             }
         }
+        return ContentToken::StringBytes(bytes);
+    }
+
+    fn lex_keyword(&mut self) -> ContentToken {
+        let word = self.lex_word();
+        return self.token_from_word(&word);
+    }
+
+    fn run(&mut self) -> Vec<ContentToken>{
+        self.offset = 0;
+        let mut toks = vec![];
+
+        while self.offset < self.data.len() {
+            match self.peek() {
+                c if c.is_whitespace() => { self.lex_char(); },
+                '\0' => { self.lex_char(); toks.push(ContentToken::Null); }
+                'q' => { self.lex_char(); toks.push(ContentToken::SaveGraphicsState); }
+                'Q' => { self.lex_char(); toks.push(ContentToken::RestoreGraphicsState); }
+                c if c.is_numeric() || matches!(c, '.' | '-') => {
+                    toks.push(ContentToken::Number(self.lex_number()));
+                },
+                'W' => { toks.push(self.lex_w())},
+                'n' => { self.lex_char(); toks.push(ContentToken::NKeyword); },
+                '/' => { self.lex_char(); toks.push(self.lex_identifier()); },
+                '(' => { self.lex_char(); toks.push(self.lex_string()); },
+                _ => { toks.push(self.lex_keyword()); }
+            };
+        }
+        return toks;
     }
 }
 
 pub fn tokenize_stream(str: Vec<u8>) -> Vec<ContentToken> {
     let bytes = str.iter().copied().collect();
-    let mut tokenizer = ContentTokenizer::new(bytes);
-    tokenizer.run();
-    return tokenizer.tokens;
+    return ContentTokenizer::new(bytes).run();
 }
 
 #[cfg(test)]
