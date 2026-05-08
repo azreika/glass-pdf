@@ -64,9 +64,24 @@ pub struct ContentStreamer {
     ctx: PageCtx,
 }
 
+pub fn stream_content(p: ContentStreamer) -> impl iced::futures::Stream<Item=Message> {
+    return stream::unfold(p, |mut parser| async move {
+        iced::futures::future::ready(()).await;
+        loop {
+            if parser.offset >= parser.tokens.len() {
+                return None;
+            }
+            let msg = parser.advance();
+            // Skip noops to avoid redundant drawings
+            if !matches!(msg, Message::Noop) {
+                return Some((msg, parser));
+            }
+        }
+    });
+}
 
 impl ContentStreamer {
-    fn new(ctx: PageCtx, tokens: Vec<ContentToken>) -> Self {
+    pub fn new(ctx: PageCtx, tokens: Vec<ContentToken>) -> Self {
         return Self {
             tokens,
             offset: 0,
@@ -83,22 +98,6 @@ impl ContentStreamer {
         self.text_state = TextState::new();
     }
 
-    pub fn stream_content(ctx: PageCtx, toks: Vec<ContentToken>) -> impl iced::futures::Stream<Item=Message> {
-        let p = Self::new(ctx, toks);
-        return stream::unfold(p, |mut parser| async move {
-            iced::futures::future::ready(()).await;
-            loop {
-                if parser.offset >= parser.tokens.len() {
-                    return None;
-                }
-                let msg = parser.advance();
-                // Skip noops to avoid redundant drawings
-                if !matches!(msg, Message::Noop) {
-                    return Some((msg, parser));
-                }
-            }
-        });
-    }
 
     fn advance(&mut self) -> Message {
         match self.state {
@@ -522,35 +521,27 @@ use std::fs;
 
 use crate::content::tokenizer::tokenize_stream;
 use crate::fonts::FontLib;
-use crate::pdf::ast::ColourSpaceLib;
+use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
 use crate::pdf::parser::parse_tokens;
 use crate::pdf::tokenizer::tokenize_pdf;
 
 use super::*;
-use futures::executor::block_on;
-use futures::StreamExt;
 
-fn collect_messages(ctx: PageCtx, tokens: Vec<ContentToken>) -> Vec<Message> {
-    let stream = ContentStreamer::stream_content(ctx, tokens);
-    futures::pin_mut!(stream);
-    let messages: Vec<Message> = block_on(stream.collect());
-    // flatten DrawBlocks
-    let mut flat = vec![];
-    for msg in messages {
-        flatten_message(msg, &mut flat);
-    }
-    return flat;
-}
+pub fn collect_messages(ctx: PageCtx, toks: Vec<ContentToken>) -> (Vec<Message>, ContentStreamer) {
+    let streamer = ContentStreamer::new(ctx, toks);
+    let mut messages = vec![];
+    let mut current = streamer;
 
-fn flatten_message(msg: Message, out: &mut Vec<Message>) {
-    match msg {
-        Message::DrawBlock(msgs) => {
-            for m in msgs {
-                flatten_message(m, out);
-            }
+    loop {
+        if current.offset >= current.tokens.len() {
+            break;
         }
-        other => out.push(other),
+        let msg = current.advance();
+        if !matches!(msg, Message::Noop) {
+            messages.push(msg);
+        }
     }
+    return (messages, current);
 }
 
 fn dummy_ctx() -> PageCtx {
@@ -576,9 +567,49 @@ fn saved_graphics() {
         ContentToken::SaveGraphicsState,
         ContentToken::RestoreGraphicsState,
     ];
-    let messages = collect_messages(ctx, vv);
+    let (messages, fstate) = collect_messages(ctx, vv);
 
     // Should all be no-ops
+    assert_eq!(messages.len(), 0);
+    assert_eq!(fstate.graphics_state.colour_nostroke, None);
+    assert_eq!(fstate.graphics_state_stack.len(), 0);
+}
+
+#[test]
+fn simple_colour() {
+    let mut ctx = dummy_ctx();
+    ctx.add_colourspace("Cs1".to_string(), ColourSpace { num_components: 1 });
+    let toks = vec![
+        ContentToken::Identifier("Cs1".to_string()),
+        ContentToken::CsNoStroke,
+
+        ContentToken::Number(0.2),
+        ContentToken::SetColourNoStroke,
+    ];
+
+    let (messages, streamer) = collect_messages(ctx, toks);
+    assert_eq!(messages.len(), 0);
+    assert_eq!(streamer.graphics_state.cs_nostroke, Some("Cs1".to_string()));
+    assert_eq!(streamer.graphics_state.colour_nostroke, Some(vec![0.2]));
+}
+
+#[test]
+fn simple_text() {
+    let ctx = dummy_ctx();
+    let toks = vec![
+        ContentToken::BTKeyword,
+
+        // TODO: need a dummy font
+        // ContentToken::Identifier("F1".to_string()),
+        // ContentToken::Number(16.0),
+        // ContentToken::TfKeyword,
+
+        // ContentToken::StringBytes("hello".to_string().as_bytes().to_vec()),
+        // ContentToken::TjKeyword,
+
+        ContentToken::ETKeyword,
+    ];
+    let (messages, _) = collect_messages(ctx, toks);
     assert_eq!(messages.len(), 0);
 }
 
@@ -604,7 +635,8 @@ fn sample_pdf() {
     let ctx = ast.mk_page_ctx(page);
     let decoded_contents = contents.decode();
     let tokenized_contents = tokenize_stream(decoded_contents);
-    let messages = collect_messages(ctx, tokenized_contents);
-    assert!(messages.len() > 0);
+
+    let (messages, _) = collect_messages(ctx, tokenized_contents);
+    assert!(messages.len() > 1);
 }
 }

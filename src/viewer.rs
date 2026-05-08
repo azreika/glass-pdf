@@ -5,9 +5,9 @@ use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
 
 use crate::content::tokenizer::ContentToken;
-use crate::content::streamer::ContentStreamer;
+use crate::content::streamer::{ContentStreamer, stream_content};
 use crate::fonts::FontLib;
-use crate::pdf::ast::ColourSpaceLib;
+use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
 use crate::viewer_message::{Message,GlyphInfo};
 
 #[derive(Clone,Debug)]
@@ -19,15 +19,21 @@ pub struct PageCtx {
     pub cs_lib: ColourSpaceLib,
 }
 
+impl PageCtx {
+    #[allow(unused)]
+    pub fn add_colourspace(&mut self, id: String, cs: ColourSpace) {
+        self.cs_lib.id_to_cs.insert(id, cs);
+    }
+}
+
 pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<ContentToken>) {
     let ctx = page_ctx.clone();
     let toks = tokens.clone();
-    let flib = ctx.font_lib.clone();
-    let fflib = flib.clone();
 
-    let mut app = iced::application(
+    let app = iced::application(
         move || {
-            let stream = ContentStreamer::stream_content(ctx.clone(), toks.clone());
+            let streamer = ContentStreamer::new(ctx.clone(), toks.clone());
+            let stream = stream_content(streamer);
             let task = Task::stream(stream);
             let scale_task = iced::window::oldest()
                 .then(|id| iced::window::scale_factor(id.unwrap()))
@@ -37,11 +43,6 @@ pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<ContentToken>) {
         Viewer::update,
         Viewer::view
     );
-
-    for (_, font) in fflib.id_to_font.iter() {
-        app = app.font(font.font_bytes.clone());
-    }
-
     app.run().unwrap();
 }
 

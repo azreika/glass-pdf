@@ -19,7 +19,6 @@ pub struct Font {
     pub widths: Vec<u32>,
     pub first_char: u32,
     pub ttf: fontdue::Font,
-    pub font_bytes: Vec<u8>,
     pub encoding: Option<String>,
 }
 

@@ -282,7 +282,6 @@ impl Pdf {
                 widths: widths.to_vec_u32(),
                 first_char: obj_info.get("FirstChar").to_num() as u32,
                 ttf: ff,
-                font_bytes: bb,
                 encoding,
             };
             id_to_font.insert(id.to_string(), font);
