@@ -1,20 +1,19 @@
 use std::fs;
 
 mod tokenizer;
-mod parser;
+mod pdf;
 mod ast;
 mod viewer;
-mod pdf_tokenizer;
 mod content;
 mod viewer_message;
 mod src_loc;
 mod fonts;
 mod transform;
 
-use crate::pdf_tokenizer::{tokenize_pdf};
-use crate::parser::{parse_tokens};
-use crate::content::tokenizer::{tokenize_stream};
-use crate::viewer::{PageCtx, view_contents};
+use pdf::tokenizer::{tokenize_pdf};
+use pdf::parser::{parse_tokens};
+use content::tokenizer::{tokenize_stream};
+use viewer::{PageCtx, view_contents};
 
 fn main() {
     let data: Vec<u8> = fs::read("./examples/pages_pdf.pdf").expect("woops");
