@@ -1,6 +1,5 @@
 use crate::pdf::tokenizer::PdfToken;
-use crate::src_loc::SrcLoc;
-use crate::pdf::ast::{Pdf,Block,Value};
+use crate::pdf::ast::{Pdf,Block,Value,SrcLoc};
 use std::collections::HashMap;
 
 struct Parser<'a> {
@@ -105,7 +104,7 @@ impl Parser<'_> {
                         assert!(is_num(&v2));
 
                         // TODO: fix up IDs here
-                        let start_id = get_num(&v1);
+                        let _start_id = get_num(&v1);
                         let num_objs = get_num(&v2);
 
                         for _ in 0..num_objs as usize {

@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use iced::futures::stream;
 use crate::content::tokenizer::ContentToken;
-use crate::fonts::{Font, FontLib};
+use crate::fonts::Font;
 
+use crate::viewer::PageCtx;
 use crate::viewer_message::{GlyphInfo, Message, State};
 use crate::transform::{Matrix, multiply_3d};
 
@@ -25,12 +26,16 @@ enum Value {
 #[derive(Clone,Debug)]
 struct GraphicsState {
     ctm: Matrix,
+    cs_nostroke: Option<String>,
+    colour_nostroke: Option<Vec<f64>>,
 }
 
 impl GraphicsState {
     fn new() -> Self {
         return GraphicsState {
             ctm: Matrix::new(),
+            cs_nostroke: None,
+            colour_nostroke: None,
         };
     }
 }
@@ -56,17 +61,17 @@ pub struct ContentStreamer {
     graphics_state: GraphicsState,
     graphics_state_stack: Vec<GraphicsState>,
 
-    font_lib: FontLib,
+    ctx: PageCtx,
 }
 
 
 impl ContentStreamer {
-    fn new(font_lib: FontLib, tokens: Vec<ContentToken>) -> Self {
+    fn new(ctx: PageCtx, tokens: Vec<ContentToken>) -> Self {
         return Self {
             tokens,
             offset: 0,
             text_state: TextState::new(),
-            font_lib,
+            ctx,
             stack: vec![],
             state: State::TopLevel,
             graphics_state_stack: vec![],
@@ -78,8 +83,8 @@ impl ContentStreamer {
         self.text_state = TextState::new();
     }
 
-    pub fn stream_content(flib: FontLib, toks: Vec<ContentToken>) -> impl iced::futures::Stream<Item=Message> {
-        let p = Self::new(flib, toks);
+    pub fn stream_content(ctx: PageCtx, toks: Vec<ContentToken>) -> impl iced::futures::Stream<Item=Message> {
+        let p = Self::new(ctx, toks);
         return stream::unfold(p, |mut parser| async move {
             iced::futures::future::ready(()).await;
             loop {
@@ -157,6 +162,15 @@ impl ContentStreamer {
             matches!(tok, ContentToken::GSKeyword);
     }
 
+    fn num_colour_components(&self) -> u8 {
+        let cs = self.graphics_state.cs_nostroke.as_ref().unwrap();
+        return self.ctx.cs_lib.num_components(cs.to_string());
+    }
+
+    fn set_colour_nostroke(&mut self, vv: Vec<f64>) {
+        self.graphics_state.colour_nostroke = Some(vv);
+    }
+
     fn is_main_operator(&self, tok: &ContentToken) -> bool {
         return
             matches!(tok, ContentToken::SaveGraphicsState) ||
@@ -164,8 +178,8 @@ impl ContentStreamer {
             matches!(tok, ContentToken::RectKeyword) ||
             matches!(tok, ContentToken::WKeyword) ||
             matches!(tok, ContentToken::NKeyword) ||
-            matches!(tok, ContentToken::CsStroke) ||
-            matches!(tok, ContentToken::EndCsStroke) ||
+            matches!(tok, ContentToken::CsNoStroke) ||
+            matches!(tok, ContentToken::SetColourNoStroke) ||
             matches!(tok, ContentToken::Fill) ||
             matches!(tok, ContentToken::IKeyword) ||
             matches!(tok, ContentToken::CmStroke) ||
@@ -208,9 +222,9 @@ impl ContentStreamer {
                 println!("TODO: implement clipping path operator N");
                 return Message::Noop;
             },
-            ContentToken::CsStroke => {
-                let _cs = self.pop_string();
-                println!("TODO: implement colour space operator cs {:?}", _cs);
+            ContentToken::CsNoStroke => {
+                let cs = self.pop_string();
+                self.set_cs_nostroke(cs);
                 return Message::Noop;
             },
             ContentToken::GSKeyword => {
@@ -218,9 +232,14 @@ impl ContentStreamer {
                 println!("TODO: implement gs keyword");
                 return Message::Noop;
             },
-            ContentToken::EndCsStroke => {
-                let _sc = self.pop_number();
-                println!("TODO: implement colour space operator sc");
+            ContentToken::SetColourNoStroke => {
+                let num_components = self.num_colour_components();
+                let mut vv = vec![];
+                for _ in 0..num_components {
+                    vv.push(self.pop_number());
+                }
+                vv.reverse();
+                self.set_colour_nostroke(vv);
                 return Message::Noop;
             },
             ContentToken::Fill => {
@@ -333,7 +352,7 @@ impl ContentStreamer {
     fn get_font(&self) -> &Font {
         return match self.text_state.font {
             None => panic!(),
-            Some(ref other) => self.font_lib.get_font(&other),
+            Some(ref other) => self.ctx.font_lib.get_font(&other),
         }
     }
 
@@ -355,6 +374,7 @@ impl ContentStreamer {
                 size: size,
                 font_id: self.get_font_id(),
                 width: cwidth,
+                colour: self.graphics_state.colour_nostroke.clone(),
             }));
 
             self.set_x(self.text_x() + cwidth);
@@ -420,6 +440,10 @@ impl ContentStreamer {
 
     fn set_x(&mut self, x: f64) {
         self.text_state.matrix.set_x(x);
+    }
+
+    fn set_cs_nostroke(&mut self, cs_id: String) {
+        self.graphics_state.cs_nostroke = Some(cs_id);
     }
 
     fn move_x(&mut self, x: f64) {

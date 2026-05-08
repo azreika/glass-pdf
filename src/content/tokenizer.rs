@@ -12,8 +12,8 @@ pub enum ContentToken {
     Identifier(String),
     CsStroke,
     CsNoStroke,
-    EndCsStroke,
-    EndCsNoStroke,
+    SetColourStroke,
+    SetColourNoStroke,
     Fill,
     IKeyword,
     CmStroke,
@@ -62,12 +62,12 @@ struct ContentTokenizer {
 impl Tokenizer<ContentToken> for ContentTokenizer {
     fn token_from_word(&self, word: &str) -> ContentToken {
         return match word {
-            "SC" => ContentToken::EndCsNoStroke,
-            "sc" => ContentToken::EndCsStroke,
+            "SC" => ContentToken::SetColourStroke,
+            "sc" => ContentToken::SetColourNoStroke,
             "f" => ContentToken::Fill,
             "i" => ContentToken::IKeyword,
-            "cs" => ContentToken::CsStroke,
-            "CS" => ContentToken::CsNoStroke,
+            "cs" => ContentToken::CsNoStroke,
+            "CS" => ContentToken::CsStroke,
             "cm" => ContentToken::CmStroke,
             "BT" => ContentToken::BTKeyword,
             "Tm" => ContentToken::TmKeyword,

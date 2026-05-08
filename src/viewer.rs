@@ -7,6 +7,7 @@ use iced::{Length, Point, Renderer, Theme};
 use crate::content::tokenizer::ContentToken;
 use crate::content::streamer::ContentStreamer;
 use crate::fonts::FontLib;
+use crate::pdf::ast::ColourSpaceLib;
 use crate::viewer_message::{Message,GlyphInfo};
 
 #[derive(Clone,Debug)]
@@ -15,6 +16,7 @@ pub struct PageCtx {
     pub width: f64,
     pub font_lib: FontLib,
     pub scale_factor: f64,
+    pub cs_lib: ColourSpaceLib,
 }
 
 pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<ContentToken>) {
@@ -25,7 +27,7 @@ pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<ContentToken>) {
 
     let mut app = iced::application(
         move || {
-            let stream = ContentStreamer::stream_content(flib.clone(), toks.clone());
+            let stream = ContentStreamer::stream_content(ctx.clone(), toks.clone());
             let task = Task::stream(stream);
             let scale_task = iced::window::oldest()
                 .then(|id| iced::window::scale_factor(id.unwrap()))
@@ -98,6 +100,36 @@ impl Default for PageState {
     }
 }
 
+fn colourize_bitmap(bitmap: &Vec<u8>, colour: &Option<Vec<f64>>) -> Vec<u8> {
+    match colour {
+        Some(vv) => {
+            if vv.len() == 3 {
+                // RGB
+                let rgb = vv.iter().map(|a| (a*255.0) as u8).collect::<Vec<u8>>();
+                let rgba: Vec<u8> = bitmap.iter().flat_map(|&a| {
+                    let mut vv = rgb.clone();
+                    vv.push(a);
+                    return vv;
+                }).collect();
+                return rgba;
+            } else if vv.len() == 1 {
+                let g = (vv[0] * 255.0) as u8;
+                // Grayscale
+                return bitmap.iter().flat_map(|&a| {
+                    return [g, g, g, a];
+                }).collect();
+            } else {
+                // CMYK?
+                panic!();
+            }
+        },
+        None => {
+            return [0,0,0].to_vec();
+        }
+    };
+
+}
+
 impl <Msg> canvas::Program<Msg> for Page {
     type State = PageState;
 
@@ -146,7 +178,7 @@ impl <Msg> canvas::Program<Msg> for Page {
             }
             let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
 
-            let rgba: Vec<u8> = bitmap.iter().flat_map(|&a| [0,0,0,a]).collect();
+            let rgba = colourize_bitmap(&bitmap, &info.colour);
             let handle = iced::widget::image::Handle::from_rgba(
                 metrics.width as u32,
                 metrics.height as u32,

@@ -1,4 +1,3 @@
-
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -12,6 +11,7 @@ impl FontLib {
     }
 }
 
+#[allow(unused)]
 #[derive(Clone, Debug)]
 pub struct Font {
     pub id: String,

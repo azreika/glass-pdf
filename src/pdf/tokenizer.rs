@@ -1,5 +1,5 @@
 use crate::tokenizer::Tokenizer;
-use crate::src_loc::SrcLoc;
+use crate::pdf::ast::SrcLoc;
 use std::fmt;
 
 #[derive(Debug, PartialEq, Clone)]

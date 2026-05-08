@@ -5,7 +5,6 @@ mod pdf;
 mod viewer;
 mod content;
 mod viewer_message;
-mod src_loc;
 mod fonts;
 mod transform;
 
@@ -15,7 +14,7 @@ use content::tokenizer::{tokenize_stream};
 use viewer::{PageCtx, view_contents};
 
 fn main() {
-    let data: Vec<u8> = fs::read("./examples/pages_pdf.pdf").expect("woops");
+    let data: Vec<u8> = fs::read("./examples/ndis_pricing.pdf").expect("woops");
     let tokens = tokenize_pdf(&data);
     let ast = parse_tokens(&tokens);
     println!("{}", ast);
@@ -47,6 +46,9 @@ fn main() {
     let fonts = resources.get("Font");
     let font_lib = ast.process_fonts(fonts);
 
+    let cs = resources.get("ColorSpace");
+    let cs_lib = ast.process_colour_spaces(cs);
+
     let media_box = page.get("MediaBox").to_vec_f32();
     assert_eq!(media_box.len(), 4);
     assert_eq!(media_box[0], 0.0);
@@ -58,6 +60,7 @@ fn main() {
         width: page_width,
         font_lib: font_lib,
         scale_factor: 1.0,
+        cs_lib: cs_lib,
     };
 
     let decoded_contents = contents.decode();

@@ -1,10 +1,43 @@
 use std::fmt;
-use crate::src_loc::SrcLoc;
 use std::collections::HashMap;
 use flate2::read::ZlibDecoder;
 use std::io::prelude::*;
-
 use crate::fonts::{FontLib, Font};
+
+#[derive(Debug, Copy, Clone)]
+pub struct SrcLoc {
+    pos: usize,
+}
+
+impl SrcLoc {
+    pub fn new(pos: usize) -> Self {
+        return SrcLoc {
+            pos,
+        }
+    }
+}
+
+impl fmt::Display for SrcLoc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.pos)
+    }
+}
+
+#[derive(Debug,Clone)]
+pub struct ColourSpace {
+    pub num_components: u8,
+}
+
+#[derive(Debug,Clone)]
+pub struct ColourSpaceLib {
+    id_to_cs: HashMap<String,ColourSpace>,
+}
+
+impl ColourSpaceLib {
+    pub fn num_components(&self, cs: String) -> u8 {
+        return self.id_to_cs.get(&cs).unwrap().num_components;
+    }
+}
 
 #[derive(Debug)]
 pub enum Block {
@@ -188,6 +221,29 @@ impl Pdf {
             }
         }
         panic!();
+    }
+
+    pub fn process_colour_spaces(&self, cs: &Value) -> ColourSpaceLib {
+        let mut id_to_cs = HashMap::new();
+        for (id, val) in cs.get_dict() {
+            let obj = val.deref(&self);
+            assert!(matches!(obj, Value::Vector(_)));
+            let vv = obj.get_vec();
+            assert_eq!(vv.len(), 2);
+            let cs_id = vv[0].get_string();
+            assert_eq!(cs_id, "ICCBased");
+            let stream = vv[1].deref(&self);
+
+            let meta = stream.metadata();
+            let n = meta.get("N").unwrap().to_num() as u8;
+            assert!(matches!(n, 1 | 3 | 4));
+
+            let cs = ColourSpace {
+                num_components: n,
+            };
+            id_to_cs.insert(id.to_string(), cs);
+        }
+        return ColourSpaceLib { id_to_cs };
     }
 
     pub fn process_fonts(&self, fonts: &Value) -> FontLib {

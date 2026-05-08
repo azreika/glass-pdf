@@ -14,6 +14,7 @@ pub struct GlyphInfo {
     pub size: f64,
     pub font_id: String,
     pub width: f64,
+    pub colour: Option<Vec<f64>>,
 }
 
 #[derive(Copy, Clone)]
