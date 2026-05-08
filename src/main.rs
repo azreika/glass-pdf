@@ -2,7 +2,6 @@ use std::fs;
 
 mod tokenizer;
 mod pdf;
-mod ast;
 mod viewer;
 mod content;
 mod viewer_message;
@@ -41,7 +40,7 @@ fn main() {
 
     let resource_ref = page.get("Resources");
     let resources = match resource_ref {
-        ast::Value::Reference{ .. } => resource_ref.deref(&ast),
+        pdf::ast::Value::Reference{ .. } => resource_ref.deref(&ast),
         _ => resource_ref,
     };
     println!("Resources:\n{}", resources);
