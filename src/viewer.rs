@@ -6,7 +6,7 @@ use iced::{Length, Point, Renderer, Theme};
 
 use crate::content::tokenizer::ContentToken;
 use crate::content::streamer::{ContentStreamer, stream_content};
-use crate::fonts::FontLib;
+use crate::fonts::{Font, FontLib};
 use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
 use crate::viewer_message::{Message,GlyphInfo};
 
@@ -23,6 +23,11 @@ impl PageCtx {
     #[allow(unused)]
     pub fn add_colourspace(&mut self, id: String, cs: ColourSpace) {
         self.cs_lib.id_to_cs.insert(id, cs);
+    }
+
+    #[allow(unused)]
+    pub fn add_font(&mut self, font: Font) {
+        self.font_lib.id_to_font.insert(font.id.to_string(), font);
     }
 }
 

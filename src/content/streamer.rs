@@ -104,20 +104,12 @@ impl ContentStreamer {
             State::TopLevel => {
                 let tok = &self.peek();
 
-                if matches!(tok, ContentToken::BTKeyword) {
+                if self.try_process_op(tok) {
                     self.next_token();
-                    self.state = State::InText;
-                    return Message::Noop;
+                } else {
+                    let value = self.parse_value();
+                    self.stack.push(value);
                 }
-
-                if self.is_main_operator(tok) {
-                    let tok = self.next_token();
-                    let msg = self.process_main_op(&tok);
-                    return msg;
-                }
-
-                let value = self.parse_value();
-                self.stack.push(value);
                 return Message::Noop;
             },
             State::InText => {
@@ -170,38 +162,19 @@ impl ContentStreamer {
         self.graphics_state.colour_nostroke = Some(vv);
     }
 
-    fn is_main_operator(&self, tok: &ContentToken) -> bool {
-        return
-            matches!(tok, ContentToken::SaveGraphicsState) ||
-            matches!(tok, ContentToken::RestoreGraphicsState) ||
-            matches!(tok, ContentToken::RectKeyword) ||
-            matches!(tok, ContentToken::WKeyword) ||
-            matches!(tok, ContentToken::NKeyword) ||
-            matches!(tok, ContentToken::CsNoStroke) ||
-            matches!(tok, ContentToken::SetColourNoStroke) ||
-            matches!(tok, ContentToken::Fill) ||
-            matches!(tok, ContentToken::IKeyword) ||
-            matches!(tok, ContentToken::CmStroke) ||
-            matches!(tok, ContentToken::MKeyword) ||
-            matches!(tok, ContentToken::HKeyword) ||
-            matches!(tok, ContentToken::LKeyword) ||
-            matches!(tok, ContentToken::VKeyword) ||
-            matches!(tok, ContentToken::YKeyword) ||
-            matches!(tok, ContentToken::EMCKeyword) ||
-            matches!(tok, ContentToken::BMCKeyword | ContentToken::WStarKeyword) ||
-            matches!(tok, ContentToken::GSKeyword)
-            ;
-    }
-
-    fn process_main_op(&mut self, tok: &ContentToken) -> Message {
+    fn try_process_op(&mut self, tok: &ContentToken) -> bool {
         match tok {
+            ContentToken::BTKeyword => {
+                self.state = State::InText;
+                return true;
+            },
             ContentToken::SaveGraphicsState => {
                 self.graphics_state_stack.push(self.graphics_state.clone());
-                return Message::Noop;
+                return true;
             },
             ContentToken::RestoreGraphicsState => {
                 self.graphics_state = self.graphics_state_stack.pop().unwrap();
-                return Message::Noop;
+                return true;
             },
             ContentToken::RectKeyword => {
                 let _height = self.pop_number();
@@ -209,27 +182,27 @@ impl ContentStreamer {
                 let _y = self.pop_number();
                 let _x = self.pop_number();
                 println!("TODO: implement rectangle thing");
-                return Message::Noop;
+                return true;
             },
             ContentToken::WKeyword | ContentToken::WStarKeyword => {
                 // Clipping Path Operator
                 println!("TODO: implement clipping path operator W/W*");
-                return Message::Noop;
+                return true;
             },
             ContentToken::NKeyword => {
                 // Clipping Path Operator - end path object without filling it
                 println!("TODO: implement clipping path operator N");
-                return Message::Noop;
+                return true;
             },
             ContentToken::CsNoStroke => {
                 let cs = self.pop_string();
                 self.set_cs_nostroke(cs);
-                return Message::Noop;
+                return true;
             },
             ContentToken::GSKeyword => {
                 let _cs = self.pop_string();
                 println!("TODO: implement gs keyword");
-                return Message::Noop;
+                return true;
             },
             ContentToken::SetColourNoStroke => {
                 let num_components = self.num_colour_components();
@@ -239,16 +212,16 @@ impl ContentStreamer {
                 }
                 vv.reverse();
                 self.set_colour_nostroke(vv);
-                return Message::Noop;
+                return true;
             },
             ContentToken::Fill => {
                 println!("TODO: implement colour space operator fill");
-                return Message::Noop;
+                return true;
             },
             ContentToken::IKeyword => {
                 println!("TODO: implement colour space operator flatness I");
                 let _flatness = self.pop_number();
-                return Message::Noop;
+                return true;
             },
             ContentToken::CmStroke => {
                 let mut mat = vec![];
@@ -259,13 +232,13 @@ impl ContentStreamer {
                 let mat = Matrix::vec6_to_matrix(&mat);
                 let result = multiply_3d(self.curr_ctm(), &mat);
                 self.graphics_state.ctm = result;
-                return Message::Noop;
+                return true;
             },
             ContentToken::MKeyword | ContentToken::LKeyword => {
                 let _y = self.pop_number();
                 let _x = self.pop_number();
                 println!("TODO: implement M and L keyword");
-                return Message::Noop;
+                return true;
             },
             ContentToken::VKeyword | ContentToken::YKeyword => {
                 let _x1 = self.pop_number();
@@ -273,22 +246,22 @@ impl ContentStreamer {
                 let _x3 = self.pop_number();
                 let _x4 = self.pop_number();
                 println!("TODO: implement V and Y keyword");
-                return Message::Noop;
+                return true;
             },
             ContentToken::HKeyword => {
                 println!("TODO: implement H keyword");
-                return Message::Noop;
+                return true;
             },
             ContentToken::BMCKeyword => {
                 let _dict = self.pop_dict();
                 println!("TODO: implement BMC keyword");
-                return Message::Noop;
+                return true;
             }
             ContentToken::EMCKeyword => {
                 println!("TODO: implement EMC keyword");
-                return Message::Noop;
+                return true;
             }
-            _ => panic!(),
+            _ => return false,
         }
     }
 
@@ -558,6 +531,20 @@ fn dummy_ctx() -> PageCtx {
     };
 }
 
+fn dummy_font() -> Font {
+    let ttf_file: Vec<u8> = fs::read("./test/inter.ttf").expect("woops");
+    let ttf = fontdue::Font::from_bytes(ttf_file, fontdue::FontSettings::default()).unwrap();
+    let font = Font {
+        id: "F1".to_string(),
+        name: "Inter".to_string(),
+        widths: vec![100; 100],
+        first_char: 32,
+        ttf: ttf,
+        encoding: Some("MacRomanEncoding".to_string()),
+    };
+    return font;
+}
+
 #[test]
 fn saved_graphics() {
     let ctx = dummy_ctx();
@@ -593,25 +580,66 @@ fn simple_colour() {
     assert_eq!(streamer.graphics_state.colour_nostroke, Some(vec![0.2]));
 }
 
+fn glyph_char(msg: &Message) -> char {
+    match msg {
+        Message::DrawGlyph(info) => {
+            return info.byte as char;
+        },
+        _ => {
+            panic!("expected glyph");
+        }
+    }
+}
+
 #[test]
 fn simple_text() {
-    let ctx = dummy_ctx();
+    let mut ctx = dummy_ctx();
+    ctx.add_font(dummy_font());
+
     let toks = vec![
         ContentToken::BTKeyword,
 
-        // TODO: need a dummy font
-        // ContentToken::Identifier("F1".to_string()),
-        // ContentToken::Number(16.0),
-        // ContentToken::TfKeyword,
+        ContentToken::Identifier("F1".to_string()),
+        ContentToken::Number(16.0),
+        ContentToken::TfKeyword,
 
-        // ContentToken::StringBytes("hello".to_string().as_bytes().to_vec()),
-        // ContentToken::TjKeyword,
+        ContentToken::StringBytes("hello".to_string().as_bytes().to_vec()),
+        ContentToken::TjKeyword,
 
         ContentToken::ETKeyword,
     ];
-    let (messages, _) = collect_messages(ctx, toks);
-    assert_eq!(messages.len(), 0);
+
+    let (messages, fstate) = collect_messages(ctx, toks);
+    assert_eq!(messages.len(), 1);
+
+    match &messages[0] {
+        Message::DrawBlock(msgs) => {
+            assert_eq!(msgs.len(), 5); // "hello"
+            assert!(msgs.iter().all(|x| matches!(x, Message::DrawGlyph(_))));
+            assert_eq!(glyph_char(&msgs[0]), 'h');
+            assert_eq!(glyph_char(&msgs[1]), 'e');
+            assert_eq!(glyph_char(&msgs[2]), 'l');
+            assert_eq!(glyph_char(&msgs[3]), 'l');
+            assert_eq!(glyph_char(&msgs[4]), 'o');
+        },
+        _ => panic!("expected draw block"),
+    }
+
+    assert_eq!(fstate.state, State::TopLevel);
 }
+
+#[test]
+fn streamer_state() {
+    let ctx = dummy_ctx();
+    let toks = vec![
+        ContentToken::BTKeyword,
+    ];
+
+    let (messages, fstate) = collect_messages(ctx, toks);
+    assert_eq!(messages.len(), 0);
+    assert_eq!(fstate.state, State::InText);
+}
+
 
 #[test]
 fn sample_pdf() {

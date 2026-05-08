@@ -17,7 +17,7 @@ pub struct GlyphInfo {
     pub colour: Option<Vec<f64>>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum State {
     TopLevel,
     InText,

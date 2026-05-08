@@ -275,7 +275,7 @@ impl Pdf {
 
             let inner_name = descriptor.get("FontName").get_string();
 
-            let ff = fontdue::Font::from_bytes(bb.clone(), fontdue::FontSettings::default()).unwrap();
+            let ff = fontdue::Font::from_bytes(bb, fontdue::FontSettings::default()).unwrap();
             let font = Font {
                 id: id.to_string(),
                 name: inner_name,
