@@ -13,8 +13,18 @@ use pdf::parser::{parse_tokens};
 use content::tokenizer::{tokenize_stream};
 use viewer::{PageCtx, view_contents};
 
+use std::env;
+
 fn main() {
-    let data: Vec<u8> = fs::read("./examples/ndis_pricing.pdf").expect("woops");
+    let args: Vec<String> = env::args().collect();
+    let fpath = if args.len() < 2 {
+        "./examples/samplepdf.pdf".to_string()
+    } else {
+        assert_eq!(args.len(), 2);
+        args[1].clone()
+    };
+
+    let data: Vec<u8> = fs::read(fpath).expect("woops");
     let tokens = tokenize_pdf(&data);
     let ast = parse_tokens(&tokens);
     println!("{}", ast);
