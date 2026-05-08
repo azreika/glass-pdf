@@ -16,7 +16,9 @@ use viewer::view_contents;
 
 use std::env;
 
-fn main() {
+use crate::pdf::ast::{Pdf, Value};
+
+fn read_pdf_bytes() -> Vec<u8> {
     let args: Vec<String> = env::args().collect();
     let fpath = if args.len() < 2 {
         "./examples/samplepdf.pdf".to_string()
@@ -24,26 +26,36 @@ fn main() {
         assert_eq!(args.len(), 2);
         args[1].clone()
     };
+    return fs::read(fpath).expect("woops");
+}
 
-    let data: Vec<u8> = fs::read(fpath).expect("woops");
-    let tokens = tokenize_pdf(&data);
-    let ast = parse_tokens(&tokens);
-    println!("{}", ast);
+fn parse_pdf(bytes: &Vec<u8>) -> Pdf {
+    let tokens = tokenize_pdf(&bytes);
+    return parse_tokens(&tokens);
+}
 
-    println!("-----------");
-
+fn get_pages(ast: &Pdf) -> &Vec<Value> {
     let trailer = ast.get_trailer_dict();
     let root_ref = trailer.get("Root").unwrap();
     let root = ast.get_object(root_ref);
     let pages_ref = root.get("Pages");
     let pages = ast.get_object(pages_ref);
     let kids = pages.get("Kids");
-    let vec = kids.get_vec();
-    assert!(vec.len() >= 1);
-    let page = ast.get_object(&vec[0]);
-    let contents = page.get("Contents").deref(&ast);
+    return kids.get_vec();
+}
 
+fn main() {
+    let pdf_bytes = read_pdf_bytes();
+    let ast = parse_pdf(&pdf_bytes);
+    println!("{}", ast);
+    println!("-----------");
+
+    let pages = get_pages(&ast);
+    assert!(pages.len() >= 1);
+    let page = ast.get_object(&pages[0]);
+    let contents = page.get("Contents").deref(&ast);
     let ctx = ast.mk_page_ctx(page);
+
     let decoded_contents = contents.decode();
     println!("Content:\n{}", contents.decode_to_string());
     let tokenized_contents = tokenize_stream(decoded_contents);
