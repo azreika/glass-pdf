@@ -9,14 +9,13 @@ mod fonts;
 mod test_consts;
 mod transform;
 
-use pdf::tokenizer::{tokenize_pdf};
-use pdf::parser::{parse_tokens};
 use content::tokenizer::{tokenize_stream};
 use viewer::view_contents;
 
 use std::env;
 
 use crate::pdf::ast::{Pdf, Value};
+use crate::pdf::parse_pdf;
 
 fn read_pdf_bytes() -> Vec<u8> {
     let args: Vec<String> = env::args().collect();
@@ -27,11 +26,6 @@ fn read_pdf_bytes() -> Vec<u8> {
         args[1].clone()
     };
     return fs::read(fpath).expect("woops");
-}
-
-fn parse_pdf(bytes: &Vec<u8>) -> Pdf {
-    let tokens = tokenize_pdf(&bytes);
-    return parse_tokens(&tokens);
 }
 
 fn get_pages(ast: &Pdf) -> &Vec<Value> {
