@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::tokenizer::Tokenizer;
 
 #[derive(Clone, Debug, PartialEq)]
+
 pub enum Token {
     Number(f64),
     Identifier(String),
@@ -106,17 +107,9 @@ impl Tokenizer<Token> for ContentTokenizer {
         }
     }
 
-    fn peek_u8(&self) -> u8 {
-        return self.data[self.offset];
-    }
-
-    fn step_ahead(&mut self) {
-        self.offset += 1;
-    }
-
-    fn has_next(&self) -> bool {
-        return self.offset < self.data.len();
-    }
+    fn peek_u8(&self) -> u8 { return self.data[self.offset]; }
+    fn step_ahead(&mut self) { self.offset += 1; }
+    fn has_next(&self) -> bool { return self.offset < self.data.len(); }
 }
 
 impl ContentTokenizer {
