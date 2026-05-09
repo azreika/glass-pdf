@@ -5,6 +5,7 @@ pub enum Token {
     Number(f64),
     Identifier(String),
     StringBytes(Vec<u8>),
+    Array(Vec<Token>),
 
     SaveGraphicsState,
     RestoreGraphicsState,
@@ -184,17 +185,33 @@ impl ContentTokenizer {
         return Token::Null;
     }
 
-    fn lex_next_value(&mut self) -> Token {
-        if self.peek().is_whitespace() {
+    fn lex_whitespace(&mut self) {
+        while self.peek().is_whitespace() {
             self.lex_char();
-            return self.lex_next_value();
         }
+    }
 
+    fn lex_array(&mut self) -> Token {
+        assert_eq!(self.lex_char(), '[');
+        let mut arr = vec![];
+        self.lex_whitespace();
+        while !matches!(self.peek(), ']') {
+            assert!(!matches!(self.peek(), '['));
+            arr.push(self.lex_next_value());
+            self.lex_whitespace();
+        }
+        assert_eq!(self.lex_char(), ']');
+        return Token::Array(arr);
+    }
+
+    fn lex_next_value(&mut self) -> Token {
+        self.lex_whitespace();
         return match self.peek() {
             'W' => self.lex_w(),
             '/' => self.lex_identifier(),
             '(' => self.lex_string(),
             '\0' => self.lex_null(),
+            '[' => self.lex_array(),
             c if c.is_numeric() || c == '-' => self.lex_number(),
             _ => self.lex_keyword(),
         };
