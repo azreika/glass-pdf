@@ -218,6 +218,13 @@ impl ContentTokenizer {
         return Token::Dict(result);
     }
 
+    fn peek_at(&self, n: usize) -> Option<char> {
+        if self.offset + n > self.data.len() {
+            return None;
+        }
+        return Some(self.data[self.offset + n] as char);
+    }
+
     fn lex_next_value(&mut self) -> Token {
         self.lex_whitespace();
         return match self.peek() {
@@ -226,7 +233,7 @@ impl ContentTokenizer {
             '(' => self.lex_string(),
             '\0' => self.lex_null(),
             '[' => self.lex_array(),
-            '<' => self.lex_dict(),
+            '<' if self.peek_at(1) == Some('<') => self.lex_dict(),
             c if c.is_numeric() || c == '-' => self.lex_number(),
             _ => self.lex_keyword(),
         };
@@ -251,6 +258,8 @@ pub fn tokenize_stream(str: Vec<u8>) -> Vec<Token> {
     let bytes = str.iter().copied().collect();
     return ContentTokenizer::new(bytes).run();
 }
+
+// TODO: add tests for hex numbers <...>
 
 #[cfg(test)]
 mod tests {
