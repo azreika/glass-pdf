@@ -177,11 +177,10 @@ impl ContentTokenizer {
             match self.peek() {
                 c if c.is_whitespace() => { self.lex_char(); },
                 '\0' => { self.lex_char(); toks.push(ContentToken::Null); }
-                c if c.is_numeric() || matches!(c, '.' | '-') => {
+                c if c.is_numeric() || matches!(c, '-') => {
                     toks.push(ContentToken::Number(self.lex_number()));
                 },
                 'W' => { toks.push(self.lex_w())},
-                'n' => { self.lex_char(); toks.push(ContentToken::NKeyword); },
                 '/' => { self.lex_char(); toks.push(self.lex_identifier()); },
                 '(' => { self.lex_char(); toks.push(self.lex_string()); },
                 _ => { toks.push(self.lex_keyword()); }
