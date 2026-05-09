@@ -10,6 +10,9 @@ pub trait Tokenizer<T> {
     // Move one step forward
     fn step_ahead(&mut self);
 
+    // Check if there is more ahead
+    fn has_next(&self) -> bool;
+
     // ------------------- //
 
     fn peek(&self) -> char {
@@ -43,7 +46,7 @@ pub trait Tokenizer<T> {
             return self.lex_char().to_string();
         }
         let mut chars = vec![];
-        while is_identifier_char(self.peek()) {
+        while self.has_next() && is_identifier_char(self.peek()) {
             chars.push(self.lex_char());
         }
         let str = chars.iter().collect();

@@ -111,6 +111,10 @@ impl Tokenizer<PdfToken> for PdfTokenizer {
         return self.data[self.offset];
     }
 
+    fn has_next(&self) -> bool {
+        return self.offset < self.data.len();
+    }
+
     fn step_ahead(&mut self) {
         self.offset += 1;
     }

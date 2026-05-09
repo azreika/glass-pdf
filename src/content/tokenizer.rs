@@ -98,6 +98,9 @@ impl Tokenizer<ContentToken> for ContentTokenizer {
             "S" => ContentToken::Stroke,
             "Tc" => ContentToken::CharSpacing,
             "Do" => ContentToken::DoKeyword,
+            "Q" => ContentToken::RestoreGraphicsState,
+            "q" => ContentToken::SaveGraphicsState,
+            "n" => ContentToken::NKeyword,
             _ => {
                 println!("missed word: `{}`", word);
                 panic!();
@@ -111,6 +114,10 @@ impl Tokenizer<ContentToken> for ContentTokenizer {
 
     fn step_ahead(&mut self) {
         self.offset += 1;
+    }
+
+    fn has_next(&self) -> bool {
+        return self.offset < self.data.len();
     }
 }
 
@@ -170,8 +177,6 @@ impl ContentTokenizer {
             match self.peek() {
                 c if c.is_whitespace() => { self.lex_char(); },
                 '\0' => { self.lex_char(); toks.push(ContentToken::Null); }
-                'q' => { self.lex_char(); toks.push(ContentToken::SaveGraphicsState); }
-                'Q' => { self.lex_char(); toks.push(ContentToken::RestoreGraphicsState); }
                 c if c.is_numeric() || matches!(c, '.' | '-') => {
                     toks.push(ContentToken::Number(self.lex_number()));
                 },
