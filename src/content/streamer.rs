@@ -115,7 +115,7 @@ impl ContentStreamer {
             State::InText => {
                 match self.peek() {
                     // End Text, go back to Top Level
-                    Token::ETKeyword => {
+                    Token::ET => {
                         self.next_token();
                         self.reset_text_state();
                         self.state = State::TopLevel;
@@ -146,11 +146,11 @@ impl ContentStreamer {
 
     fn is_operator(&self, tok: &Token) -> bool {
         return
-            matches!(tok, Token::TmKeyword) ||
-            matches!(tok, Token::TfKeyword) ||
-            matches!(tok, Token::TjKeyword) ||
-            matches!(tok, Token::TJKeyword) ||
-            matches!(tok, Token::GSKeyword);
+            matches!(tok, Token::Tm) ||
+            matches!(tok, Token::Tf) ||
+            matches!(tok, Token::Tj) ||
+            matches!(tok, Token::TJ) ||
+            matches!(tok, Token::GS);
     }
 
     fn num_colour_components(&self) -> u8 {
@@ -164,7 +164,7 @@ impl ContentStreamer {
 
     fn try_process_op(&mut self, tok: &Token) -> bool {
         match tok {
-            Token::BTKeyword => {
+            Token::BT => {
                 self.state = State::InText;
                 return true;
             },
@@ -176,7 +176,7 @@ impl ContentStreamer {
                 self.graphics_state = self.graphics_state_stack.pop().unwrap();
                 return true;
             },
-            Token::RectKeyword => {
+            Token::Rect => {
                 let _height = self.pop_number();
                 let _width = self.pop_number();
                 let _y = self.pop_number();
@@ -184,12 +184,12 @@ impl ContentStreamer {
                 println!("TODO: implement rectangle thing");
                 return true;
             },
-            Token::WKeyword | Token::WStarKeyword => {
+            Token::W | Token::WStar => {
                 // Clipping Path Operator
                 println!("TODO: implement clipping path operator W/W*");
                 return true;
             },
-            Token::NKeyword => {
+            Token::N => {
                 // Clipping Path Operator - end path object without filling it
                 println!("TODO: implement clipping path operator N");
                 return true;
@@ -199,7 +199,7 @@ impl ContentStreamer {
                 self.set_cs_nostroke(cs);
                 return true;
             },
-            Token::GSKeyword => {
+            Token::GS => {
                 let _cs = self.pop_string();
                 println!("TODO: implement gs keyword");
                 return true;
@@ -218,7 +218,7 @@ impl ContentStreamer {
                 println!("TODO: implement colour space operator fill");
                 return true;
             },
-            Token::IKeyword => {
+            Token::I => {
                 println!("TODO: implement colour space operator flatness I");
                 let _flatness = self.pop_number();
                 return true;
@@ -234,13 +234,13 @@ impl ContentStreamer {
                 self.graphics_state.ctm = result;
                 return true;
             },
-            Token::MKeyword | Token::LKeyword => {
+            Token::M | Token::L => {
                 let _y = self.pop_number();
                 let _x = self.pop_number();
                 println!("TODO: implement M and L keyword");
                 return true;
             },
-            Token::VKeyword | Token::YKeyword => {
+            Token::V | Token::Y => {
                 let _x1 = self.pop_number();
                 let _x2 = self.pop_number();
                 let _x3 = self.pop_number();
@@ -248,16 +248,16 @@ impl ContentStreamer {
                 println!("TODO: implement V and Y keyword");
                 return true;
             },
-            Token::HKeyword => {
+            Token::H => {
                 println!("TODO: implement H keyword");
                 return true;
             },
-            Token::BMCKeyword => {
+            Token::BMC => {
                 let _dict = self.pop_dict();
                 println!("TODO: implement BMC keyword");
                 return true;
             }
-            Token::EMCKeyword => {
+            Token::EMC => {
                 println!("TODO: implement EMC keyword");
                 return true;
             }
@@ -361,7 +361,7 @@ impl ContentStreamer {
 
     fn process_op(&mut self, tok: &Token) -> Message {
         match tok {
-            Token::TmKeyword => {
+            Token::Tm => {
                 let mut mat = vec![];
                 for _ in 0..6 {
                     mat.push(self.pop_number());
@@ -370,19 +370,19 @@ impl ContentStreamer {
                 self.text_state.matrix = Matrix::vec6_to_matrix(&mat);
                 return Message::Noop;
             },
-            Token::TfKeyword => {
+            Token::Tf => {
                 let size = self.pop_number();
                 let font = self.pop_string();
                 self.text_state.font = Some(font);
                 self.text_state.size = Some(size);
                 return Message::Noop;
             },
-            Token::TjKeyword => {
+            Token::Tj => {
                 // show one
                 let str = self.pop_string_u8();
                 return self.mk_message(str);
             },
-            Token::TJKeyword => {
+            Token::TJ => {
                 // show one or mroe
                 let arr = self.pop_array();
                 let mut msgs = vec![];
@@ -401,7 +401,7 @@ impl ContentStreamer {
                 }
                 return self.mk_message_block(msgs);
             },
-            Token::GSKeyword => {
+            Token::GS => {
                 let _cs = self.pop_string();
                 println!("TODO: implement gs keyword");
                 return Message::Noop;
@@ -573,16 +573,16 @@ fn simple_text() {
     ctx.add_font(dummy_font());
 
     let toks = vec![
-        Token::BTKeyword,
+        Token::BT,
 
         Token::Identifier("F1".to_string()),
         Token::Number(16.0),
-        Token::TfKeyword,
+        Token::Tf,
 
         Token::StringBytes("hello".to_string().as_bytes().to_vec()),
-        Token::TjKeyword,
+        Token::Tj,
 
-        Token::ETKeyword,
+        Token::ET,
     ];
 
     let (messages, fstate) = collect_messages(ctx, toks);
@@ -608,7 +608,7 @@ fn simple_text() {
 fn streamer_state() {
     let ctx = dummy_ctx();
     let toks = vec![
-        Token::BTKeyword,
+        Token::BT,
     ];
 
     let (messages, fstate) = collect_messages(ctx, toks);
