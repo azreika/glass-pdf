@@ -35,8 +35,6 @@ pub enum Token {
     VKeyword,
     YKeyword,
     CKeyword,
-    AngleOpen,
-    AngleClose,
     BMCKeyword,
     EMCKeyword,
     GSKeyword,
@@ -83,8 +81,6 @@ impl Tokenizer<Token> for ContentTokenizer {
             "v" => Token::VKeyword,
             "c" => Token::CKeyword,
             "y" => Token::YKeyword,
-            "<" => Token::AngleOpen,
-            ">" => Token::AngleClose,
             "BDC" => Token::BMCKeyword,
             "EMC" => Token::EMCKeyword,
             "BMC" => Token::BMCKeyword,
@@ -206,14 +202,18 @@ impl ContentTokenizer {
     fn lex_dict(&mut self) -> Token {
         let mut result = HashMap::new();
         assert_eq!(self.lex_char(), '<');
+        assert_eq!(self.lex_char(), '<');
+
         self.lex_whitespace();
 
         while !matches!(self.peek(), '>') {
+            assert_eq!(self.lex_char(), '/');
             let id = self.lex_word();
             let value = self.lex_next_value();
             self.lex_whitespace();
             result.insert(id, value);
         }
+        assert_eq!(self.lex_char(), '>');
         assert_eq!(self.lex_char(), '>');
         return Token::Dict(result);
     }
