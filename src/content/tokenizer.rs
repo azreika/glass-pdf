@@ -2,14 +2,16 @@ use crate::tokenizer::Tokenizer;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContentToken {
+    Number(f64),
+    Identifier(String),
+    StringBytes(Vec<u8>),
+
     SaveGraphicsState,
     RestoreGraphicsState,
-    Number(f64),
     RectKeyword,
     WKeyword,
     WStarKeyword,
     NKeyword,
-    Identifier(String),
     CsStroke,
     CsNoStroke,
     SetColourStroke,
@@ -25,8 +27,6 @@ pub enum ContentToken {
     ETKeyword,
     LBracket,
     RBracket,
-    Null,
-    StringBytes(Vec<u8>),
     MKeyword,
     LKeyword,
     HKeyword,
@@ -49,6 +49,8 @@ pub enum ContentToken {
     Stroke,
     CharSpacing,
     DoKeyword,
+
+    Null,
 }
 
 struct ContentTokenizer {
