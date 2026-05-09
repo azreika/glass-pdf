@@ -148,10 +148,10 @@ impl ContentTokenizer {
             let mm = self.lex_u8();
             match mm as char {
                 '\\' => {
+                    // consume \(, \), \\, \n, etc.
                     bytes.push(mm);
-                    if self.offset < self.data.len() {
-                        bytes.push(self.lex_u8()); // consume \(, \), \\, \n, etc.
-                    }
+                    assert!(self.has_next());
+                    bytes.push(self.lex_u8());
                 },
                 ')' => {
                     depth -= 1;
@@ -203,8 +203,12 @@ mod tests {
     use crate::test_consts::tests::SAMPLE_PDF_STREAM;
     use super::*;
 
+    fn str_bytes(str: &str) -> Vec<u8> {
+        return str.as_bytes().to_vec();
+    }
+
     fn run_tokenizer(str: &str) -> Vec<ContentToken> {
-        return tokenize_stream(str.as_bytes().to_vec());
+        return tokenize_stream(str_bytes(str));
     }
 
     #[test]
@@ -219,6 +223,17 @@ mod tests {
             ContentToken::RestoreGraphicsState,
             ContentToken::SaveGraphicsState,
             ContentToken::RestoreGraphicsState,
+        ];
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn escaped_strings() {
+        let actual = run_tokenizer("
+        (\\(hello\\))
+        ");
+        let expected = vec![
+            ContentToken::StringBytes(str_bytes("\\(hello\\)")),
         ];
         assert_eq!(actual, expected);
     }
