@@ -4,7 +4,7 @@ use iced;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
 
-use crate::content::tokenizer::ContentToken;
+use crate::content::tokenizer::Token;
 use crate::content::streamer::{ContentStreamer, stream_content};
 use crate::fonts::{Font, FontLib};
 use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
@@ -31,7 +31,7 @@ impl PageCtx {
     }
 }
 
-pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<ContentToken>) {
+pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
     let ctx = page_ctx.clone();
     let toks = tokens.clone();
 

@@ -1,7 +1,7 @@
 use crate::tokenizer::Tokenizer;
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum ContentToken {
+pub enum Token {
     Number(f64),
     Identifier(String),
     StringBytes(Vec<u8>),
@@ -58,51 +58,51 @@ struct ContentTokenizer {
     offset: usize,
 }
 
-impl Tokenizer<ContentToken> for ContentTokenizer {
-    fn token_from_word(&self, word: &str) -> ContentToken {
+impl Tokenizer<Token> for ContentTokenizer {
+    fn token_from_word(&self, word: &str) -> Token {
         return match word {
-            "SC" => ContentToken::SetColourStroke,
-            "sc" => ContentToken::SetColourNoStroke,
-            "f" => ContentToken::Fill,
-            "i" => ContentToken::IKeyword,
-            "cs" => ContentToken::CsNoStroke,
-            "CS" => ContentToken::CsStroke,
-            "cm" => ContentToken::CmStroke,
-            "BT" => ContentToken::BTKeyword,
-            "Tm" => ContentToken::TmKeyword,
-            "Tf" => ContentToken::TfKeyword,
-            "Tj" => ContentToken::TjKeyword,
-            "ET" => ContentToken::ETKeyword,
-            "[" => ContentToken::LBracket,
-            "]" => ContentToken::RBracket,
-            "TJ" => ContentToken::TJKeyword,
-            "re" => ContentToken::RectKeyword,
-            "m" => ContentToken::MKeyword,
-            "l" => ContentToken::LKeyword,
-            "h" => ContentToken::HKeyword,
-            "v" => ContentToken::VKeyword,
-            "c" => ContentToken::CKeyword,
-            "y" => ContentToken::YKeyword,
-            "<" => ContentToken::AngleOpen,
-            ">" => ContentToken::AngleClose,
-            "BDC" => ContentToken::BMCKeyword,
-            "EMC" => ContentToken::EMCKeyword,
-            "BMC" => ContentToken::BMCKeyword,
-            "gs" => ContentToken::GSKeyword,
-            "g" => ContentToken::GNonStroke,
-            "G" => ContentToken::GStroke,
-            "rg" => ContentToken::RGNonStroke,
-            "RG" => ContentToken::RGStroke,
-            "*" => ContentToken::Star,
-            "w" => ContentToken::WLineWidth,
-            "J" => ContentToken::LineCap,
-            "j" => ContentToken::LineJoin,
-            "S" => ContentToken::Stroke,
-            "Tc" => ContentToken::CharSpacing,
-            "Do" => ContentToken::DoKeyword,
-            "Q" => ContentToken::RestoreGraphicsState,
-            "q" => ContentToken::SaveGraphicsState,
-            "n" => ContentToken::NKeyword,
+            "SC" => Token::SetColourStroke,
+            "sc" => Token::SetColourNoStroke,
+            "f" => Token::Fill,
+            "i" => Token::IKeyword,
+            "cs" => Token::CsNoStroke,
+            "CS" => Token::CsStroke,
+            "cm" => Token::CmStroke,
+            "BT" => Token::BTKeyword,
+            "Tm" => Token::TmKeyword,
+            "Tf" => Token::TfKeyword,
+            "Tj" => Token::TjKeyword,
+            "ET" => Token::ETKeyword,
+            "[" => Token::LBracket,
+            "]" => Token::RBracket,
+            "TJ" => Token::TJKeyword,
+            "re" => Token::RectKeyword,
+            "m" => Token::MKeyword,
+            "l" => Token::LKeyword,
+            "h" => Token::HKeyword,
+            "v" => Token::VKeyword,
+            "c" => Token::CKeyword,
+            "y" => Token::YKeyword,
+            "<" => Token::AngleOpen,
+            ">" => Token::AngleClose,
+            "BDC" => Token::BMCKeyword,
+            "EMC" => Token::EMCKeyword,
+            "BMC" => Token::BMCKeyword,
+            "gs" => Token::GSKeyword,
+            "g" => Token::GNonStroke,
+            "G" => Token::GStroke,
+            "rg" => Token::RGNonStroke,
+            "RG" => Token::RGStroke,
+            "*" => Token::Star,
+            "w" => Token::WLineWidth,
+            "J" => Token::LineCap,
+            "j" => Token::LineJoin,
+            "S" => Token::Stroke,
+            "Tc" => Token::CharSpacing,
+            "Do" => Token::DoKeyword,
+            "Q" => Token::RestoreGraphicsState,
+            "q" => Token::SaveGraphicsState,
+            "n" => Token::NKeyword,
             _ => {
                 println!("missed word: `{}`", word);
                 panic!();
@@ -128,22 +128,22 @@ impl ContentTokenizer {
         return ContentTokenizer { data, offset: 0 };
     }
 
-    fn lex_w(&mut self) -> ContentToken {
+    fn lex_w(&mut self) -> Token {
         self.eat_char('W');
         if self.peek() == '*' {
             self.eat_char('*');
-            return ContentToken::WStarKeyword;
+            return Token::WStarKeyword;
         } else {
-            return ContentToken::WKeyword;
+            return Token::WKeyword;
         }
     }
 
-    fn lex_identifier(&mut self) -> ContentToken {
+    fn lex_identifier(&mut self) -> Token {
         let id = self.lex_word();
-        return ContentToken::Identifier(id);
+        return Token::Identifier(id);
     }
 
-    fn lex_string(&mut self) -> ContentToken {
+    fn lex_string(&mut self) -> Token {
         let mut bytes = vec![];
         let mut depth = 1;
         while depth > 0 && self.offset < self.data.len() {
@@ -163,20 +163,20 @@ impl ContentTokenizer {
                 _   => bytes.push(mm),
             }
         }
-        return ContentToken::StringBytes(bytes);
+        return Token::StringBytes(bytes);
     }
 
-    fn lex_keyword(&mut self) -> ContentToken {
+    fn lex_keyword(&mut self) -> Token {
         let word = self.lex_word();
         return self.token_from_word(&word);
     }
 
-    fn lex_number(&mut self) -> ContentToken {
+    fn lex_number(&mut self) -> Token {
         let number = self.parse_next_number();
-        return ContentToken::Number(number);
+        return Token::Number(number);
     }
 
-    fn run(&mut self) -> Vec<ContentToken>{
+    fn run(&mut self) -> Vec<Token>{
         self.offset = 0;
         let mut toks = vec![];
 
@@ -185,7 +185,7 @@ impl ContentTokenizer {
                 'W' => { toks.push(self.lex_w())},
                 '/' => { self.lex_char(); toks.push(self.lex_identifier()); },
                 '(' => { self.lex_char(); toks.push(self.lex_string()); },
-                '\0' => { self.lex_char(); toks.push(ContentToken::Null); }
+                '\0' => { self.lex_char(); toks.push(Token::Null); }
                 c if c.is_whitespace() => { self.lex_char(); },
                 c if c.is_numeric() || c == '-' => { toks.push(self.lex_number()); },
                 _ => { toks.push(self.lex_keyword()); }
@@ -195,7 +195,7 @@ impl ContentTokenizer {
     }
 }
 
-pub fn tokenize_stream(str: Vec<u8>) -> Vec<ContentToken> {
+pub fn tokenize_stream(str: Vec<u8>) -> Vec<Token> {
     let bytes = str.iter().copied().collect();
     return ContentTokenizer::new(bytes).run();
 }
@@ -209,7 +209,7 @@ mod tests {
         return str.as_bytes().to_vec();
     }
 
-    fn run_tokenizer(str: &str) -> Vec<ContentToken> {
+    fn run_tokenizer(str: &str) -> Vec<Token> {
         return tokenize_stream(str_bytes(str));
     }
 
@@ -219,12 +219,12 @@ mod tests {
         q Q q Q q Q
         ");
         let expected = vec![
-            ContentToken::SaveGraphicsState,
-            ContentToken::RestoreGraphicsState,
-            ContentToken::SaveGraphicsState,
-            ContentToken::RestoreGraphicsState,
-            ContentToken::SaveGraphicsState,
-            ContentToken::RestoreGraphicsState,
+            Token::SaveGraphicsState,
+            Token::RestoreGraphicsState,
+            Token::SaveGraphicsState,
+            Token::RestoreGraphicsState,
+            Token::SaveGraphicsState,
+            Token::RestoreGraphicsState,
         ];
         assert_eq!(actual, expected);
     }
@@ -235,7 +235,7 @@ mod tests {
         (\\(hello\\))
         ");
         let expected = vec![
-            ContentToken::StringBytes(str_bytes("\\(hello\\)")),
+            Token::StringBytes(str_bytes("\\(hello\\)")),
         ];
         assert_eq!(actual, expected);
 
@@ -243,7 +243,7 @@ mod tests {
         (hello\\n)
         ");
         let expected = vec![
-            ContentToken::StringBytes(str_bytes("hello\\n")),
+            Token::StringBytes(str_bytes("hello\\n")),
         ];
         assert_eq!(actual, expected);
     }
@@ -252,21 +252,21 @@ mod tests {
     fn w_keywords() {
         let actual = run_tokenizer("q Q W q Q");
         let expected = vec![
-            ContentToken::SaveGraphicsState,
-            ContentToken::RestoreGraphicsState,
-            ContentToken::WKeyword,
-            ContentToken::SaveGraphicsState,
-            ContentToken::RestoreGraphicsState,
+            Token::SaveGraphicsState,
+            Token::RestoreGraphicsState,
+            Token::WKeyword,
+            Token::SaveGraphicsState,
+            Token::RestoreGraphicsState,
         ];
         assert_eq!(actual, expected);
 
         let actual = run_tokenizer("q Q W* q Q");
         let expected = vec![
-            ContentToken::SaveGraphicsState,
-            ContentToken::RestoreGraphicsState,
-            ContentToken::WStarKeyword,
-            ContentToken::SaveGraphicsState,
-            ContentToken::RestoreGraphicsState,
+            Token::SaveGraphicsState,
+            Token::RestoreGraphicsState,
+            Token::WStarKeyword,
+            Token::SaveGraphicsState,
+            Token::RestoreGraphicsState,
         ];
         assert_eq!(actual, expected);
     }

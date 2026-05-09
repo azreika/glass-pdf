@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use iced::futures::stream;
-use crate::content::tokenizer::ContentToken;
+use crate::content::tokenizer::Token;
 use crate::fonts::Font;
 
 use crate::viewer::PageCtx;
@@ -52,7 +52,7 @@ impl TextState {
 
 pub struct ContentStreamer {
     state: State,
-    tokens: Vec<ContentToken>,
+    tokens: Vec<Token>,
     stack: Vec<Value>,
     offset: usize,
 
@@ -81,7 +81,7 @@ pub fn stream_content(p: ContentStreamer) -> impl iced::futures::Stream<Item=Mes
 }
 
 impl ContentStreamer {
-    pub fn new(ctx: PageCtx, tokens: Vec<ContentToken>) -> Self {
+    pub fn new(ctx: PageCtx, tokens: Vec<Token>) -> Self {
         return Self {
             tokens,
             offset: 0,
@@ -115,7 +115,7 @@ impl ContentStreamer {
             State::InText => {
                 match self.peek() {
                     // End Text, go back to Top Level
-                    ContentToken::ETKeyword => {
+                    Token::ETKeyword => {
                         self.next_token();
                         self.reset_text_state();
                         self.state = State::TopLevel;
@@ -138,19 +138,19 @@ impl ContentStreamer {
         }
     }
 
-    fn next_token(&mut self) -> ContentToken {
+    fn next_token(&mut self) -> Token {
         let tok = self.peek();
         self.offset += 1;
         return tok;
     }
 
-    fn is_operator(&self, tok: &ContentToken) -> bool {
+    fn is_operator(&self, tok: &Token) -> bool {
         return
-            matches!(tok, ContentToken::TmKeyword) ||
-            matches!(tok, ContentToken::TfKeyword) ||
-            matches!(tok, ContentToken::TjKeyword) ||
-            matches!(tok, ContentToken::TJKeyword) ||
-            matches!(tok, ContentToken::GSKeyword);
+            matches!(tok, Token::TmKeyword) ||
+            matches!(tok, Token::TfKeyword) ||
+            matches!(tok, Token::TjKeyword) ||
+            matches!(tok, Token::TJKeyword) ||
+            matches!(tok, Token::GSKeyword);
     }
 
     fn num_colour_components(&self) -> u8 {
@@ -162,21 +162,21 @@ impl ContentStreamer {
         self.graphics_state.colour_nostroke = Some(vv);
     }
 
-    fn try_process_op(&mut self, tok: &ContentToken) -> bool {
+    fn try_process_op(&mut self, tok: &Token) -> bool {
         match tok {
-            ContentToken::BTKeyword => {
+            Token::BTKeyword => {
                 self.state = State::InText;
                 return true;
             },
-            ContentToken::SaveGraphicsState => {
+            Token::SaveGraphicsState => {
                 self.graphics_state_stack.push(self.graphics_state.clone());
                 return true;
             },
-            ContentToken::RestoreGraphicsState => {
+            Token::RestoreGraphicsState => {
                 self.graphics_state = self.graphics_state_stack.pop().unwrap();
                 return true;
             },
-            ContentToken::RectKeyword => {
+            Token::RectKeyword => {
                 let _height = self.pop_number();
                 let _width = self.pop_number();
                 let _y = self.pop_number();
@@ -184,27 +184,27 @@ impl ContentStreamer {
                 println!("TODO: implement rectangle thing");
                 return true;
             },
-            ContentToken::WKeyword | ContentToken::WStarKeyword => {
+            Token::WKeyword | Token::WStarKeyword => {
                 // Clipping Path Operator
                 println!("TODO: implement clipping path operator W/W*");
                 return true;
             },
-            ContentToken::NKeyword => {
+            Token::NKeyword => {
                 // Clipping Path Operator - end path object without filling it
                 println!("TODO: implement clipping path operator N");
                 return true;
             },
-            ContentToken::CsNoStroke => {
+            Token::CsNoStroke => {
                 let cs = self.pop_string();
                 self.set_cs_nostroke(cs);
                 return true;
             },
-            ContentToken::GSKeyword => {
+            Token::GSKeyword => {
                 let _cs = self.pop_string();
                 println!("TODO: implement gs keyword");
                 return true;
             },
-            ContentToken::SetColourNoStroke => {
+            Token::SetColourNoStroke => {
                 let num_components = self.num_colour_components();
                 let mut vv = vec![];
                 for _ in 0..num_components {
@@ -214,16 +214,16 @@ impl ContentStreamer {
                 self.set_colour_nostroke(vv);
                 return true;
             },
-            ContentToken::Fill => {
+            Token::Fill => {
                 println!("TODO: implement colour space operator fill");
                 return true;
             },
-            ContentToken::IKeyword => {
+            Token::IKeyword => {
                 println!("TODO: implement colour space operator flatness I");
                 let _flatness = self.pop_number();
                 return true;
             },
-            ContentToken::CmStroke => {
+            Token::CmStroke => {
                 let mut mat = vec![];
                 for _ in 0..6 {
                     mat.push(self.pop_number());
@@ -234,13 +234,13 @@ impl ContentStreamer {
                 self.graphics_state.ctm = result;
                 return true;
             },
-            ContentToken::MKeyword | ContentToken::LKeyword => {
+            Token::MKeyword | Token::LKeyword => {
                 let _y = self.pop_number();
                 let _x = self.pop_number();
                 println!("TODO: implement M and L keyword");
                 return true;
             },
-            ContentToken::VKeyword | ContentToken::YKeyword => {
+            Token::VKeyword | Token::YKeyword => {
                 let _x1 = self.pop_number();
                 let _x2 = self.pop_number();
                 let _x3 = self.pop_number();
@@ -248,16 +248,16 @@ impl ContentStreamer {
                 println!("TODO: implement V and Y keyword");
                 return true;
             },
-            ContentToken::HKeyword => {
+            Token::HKeyword => {
                 println!("TODO: implement H keyword");
                 return true;
             },
-            ContentToken::BMCKeyword => {
+            Token::BMCKeyword => {
                 let _dict = self.pop_dict();
                 println!("TODO: implement BMC keyword");
                 return true;
             }
-            ContentToken::EMCKeyword => {
+            Token::EMCKeyword => {
                 println!("TODO: implement EMC keyword");
                 return true;
             }
@@ -359,9 +359,9 @@ impl ContentStreamer {
         return Message::DrawBlock(msgs);
     }
 
-    fn process_op(&mut self, tok: &ContentToken) -> Message {
+    fn process_op(&mut self, tok: &Token) -> Message {
         match tok {
-            ContentToken::TmKeyword => {
+            Token::TmKeyword => {
                 let mut mat = vec![];
                 for _ in 0..6 {
                     mat.push(self.pop_number());
@@ -370,19 +370,19 @@ impl ContentStreamer {
                 self.text_state.matrix = Matrix::vec6_to_matrix(&mat);
                 return Message::Noop;
             },
-            ContentToken::TfKeyword => {
+            Token::TfKeyword => {
                 let size = self.pop_number();
                 let font = self.pop_string();
                 self.text_state.font = Some(font);
                 self.text_state.size = Some(size);
                 return Message::Noop;
             },
-            ContentToken::TjKeyword => {
+            Token::TjKeyword => {
                 // show one
                 let str = self.pop_string_u8();
                 return self.mk_message(str);
             },
-            ContentToken::TJKeyword => {
+            Token::TJKeyword => {
                 // show one or mroe
                 let arr = self.pop_array();
                 let mut msgs = vec![];
@@ -401,7 +401,7 @@ impl ContentStreamer {
                 }
                 return self.mk_message_block(msgs);
             },
-            ContentToken::GSKeyword => {
+            Token::GSKeyword => {
                 let _cs = self.pop_string();
                 println!("TODO: implement gs keyword");
                 return Message::Noop;
@@ -435,44 +435,44 @@ impl ContentStreamer {
     fn parse_value(&mut self) -> Value {
         let tok = self.next_token();
         return match tok {
-            ContentToken::Identifier(id) => Value::Identifier(id.to_string()),
-            ContentToken::Number(x) => Value::Number(x),
-            ContentToken::LBracket => self.parse_array(),
-            ContentToken::StringBytes(bytes) => Value::StringBytes(bytes),
-            ContentToken::AngleOpen => self.parse_dict(),
+            Token::Identifier(id) => Value::Identifier(id.to_string()),
+            Token::Number(x) => Value::Number(x),
+            Token::LBracket => self.parse_array(),
+            Token::StringBytes(bytes) => Value::StringBytes(bytes),
+            Token::AngleOpen => self.parse_dict(),
             _ => panic!("Unexpected token {:?}", tok),
         }
     }
 
-    fn peek(&self) -> ContentToken {
+    fn peek(&self) -> Token {
         return self.tokens[self.offset].clone();
     }
 
     fn parse_dict(&mut self) -> Value {
         let mut result = HashMap::new();
-        assert!(matches!(self.next_token(), ContentToken::AngleOpen));
+        assert!(matches!(self.next_token(), Token::AngleOpen));
 
         loop {
             let id_tok = self.next_token();
             match id_tok {
-                ContentToken::Identifier(id) => {
+                Token::Identifier(id) => {
                     let value = self.parse_value();
                     result.insert(id, value);
                 },
-                ContentToken::AngleClose => break,
+                Token::AngleClose => break,
                 _ => panic!(),
             }
         }
 
-        assert!(matches!(self.next_token(), ContentToken::AngleClose));
+        assert!(matches!(self.next_token(), Token::AngleClose));
         return Value::Dict(result);
     }
 
     fn parse_array(&mut self) -> Value {
         let mut arr = vec![];
 
-        while !matches!(self.peek(), ContentToken::RBracket) {
-            assert!(!matches!(self.peek(), ContentToken::LBracket));
+        while !matches!(self.peek(), Token::RBracket) {
+            assert!(!matches!(self.peek(), Token::LBracket));
             let expr = self.parse_value();
             arr.push(Box::new(expr));
         }
@@ -493,7 +493,7 @@ use crate::pdf::tokenizer::tokenize_pdf;
 
 use super::*;
 
-pub fn collect_messages(ctx: PageCtx, toks: Vec<ContentToken>) -> (Vec<Message>, ContentStreamer) {
+pub fn collect_messages(ctx: PageCtx, toks: Vec<Token>) -> (Vec<Message>, ContentStreamer) {
     let streamer = ContentStreamer::new(ctx, toks);
     let mut messages = vec![];
     let mut current = streamer;
@@ -542,10 +542,10 @@ fn dummy_font() -> Font {
 fn saved_graphics() {
     let ctx = dummy_ctx();
     let vv = vec![
-        ContentToken::SaveGraphicsState,
-        ContentToken::RestoreGraphicsState,
-        ContentToken::SaveGraphicsState,
-        ContentToken::RestoreGraphicsState,
+        Token::SaveGraphicsState,
+        Token::RestoreGraphicsState,
+        Token::SaveGraphicsState,
+        Token::RestoreGraphicsState,
     ];
     let (messages, fstate) = collect_messages(ctx, vv);
 
@@ -560,11 +560,11 @@ fn simple_colour() {
     let mut ctx = dummy_ctx();
     ctx.add_colourspace("Cs1".to_string(), ColourSpace { num_components: 1 });
     let toks = vec![
-        ContentToken::Identifier("Cs1".to_string()),
-        ContentToken::CsNoStroke,
+        Token::Identifier("Cs1".to_string()),
+        Token::CsNoStroke,
 
-        ContentToken::Number(0.2),
-        ContentToken::SetColourNoStroke,
+        Token::Number(0.2),
+        Token::SetColourNoStroke,
     ];
 
     let (messages, streamer) = collect_messages(ctx, toks);
@@ -590,16 +590,16 @@ fn simple_text() {
     ctx.add_font(dummy_font());
 
     let toks = vec![
-        ContentToken::BTKeyword,
+        Token::BTKeyword,
 
-        ContentToken::Identifier("F1".to_string()),
-        ContentToken::Number(16.0),
-        ContentToken::TfKeyword,
+        Token::Identifier("F1".to_string()),
+        Token::Number(16.0),
+        Token::TfKeyword,
 
-        ContentToken::StringBytes("hello".to_string().as_bytes().to_vec()),
-        ContentToken::TjKeyword,
+        Token::StringBytes("hello".to_string().as_bytes().to_vec()),
+        Token::TjKeyword,
 
-        ContentToken::ETKeyword,
+        Token::ETKeyword,
     ];
 
     let (messages, fstate) = collect_messages(ctx, toks);
@@ -625,7 +625,7 @@ fn simple_text() {
 fn streamer_state() {
     let ctx = dummy_ctx();
     let toks = vec![
-        ContentToken::BTKeyword,
+        Token::BTKeyword,
     ];
 
     let (messages, fstate) = collect_messages(ctx, toks);
