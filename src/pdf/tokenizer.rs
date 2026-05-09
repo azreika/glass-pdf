@@ -164,7 +164,7 @@ impl PdfTokenizer {
             if c.is_whitespace() {
                 self.lex_char();
             } else if c.is_numeric() || c == '-' {
-                let num = self.lex_number();
+                let num = self.parse_next_number();
                 self.push_token(loc, PdfToken::Number(num));
             } else if c == '%' {
                 self.eat_char('%');

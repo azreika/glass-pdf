@@ -53,7 +53,7 @@ pub trait Tokenizer<T> {
         return str;
     }
 
-    fn lex_number<N>(&mut self) -> N where
+    fn parse_next_number<N>(&mut self) -> N where
         N: FromStr,
         N::Err: std::fmt::Debug,
     {

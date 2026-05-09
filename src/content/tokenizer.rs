@@ -169,20 +169,23 @@ impl ContentTokenizer {
         return self.token_from_word(&word);
     }
 
+    fn lex_number(&mut self) -> ContentToken {
+        let number = self.parse_next_number();
+        return ContentToken::Number(number);
+    }
+
     fn run(&mut self) -> Vec<ContentToken>{
         self.offset = 0;
         let mut toks = vec![];
 
         while self.offset < self.data.len() {
             match self.peek() {
-                c if c.is_whitespace() => { self.lex_char(); },
-                '\0' => { self.lex_char(); toks.push(ContentToken::Null); }
-                c if c.is_numeric() || matches!(c, '-') => {
-                    toks.push(ContentToken::Number(self.lex_number()));
-                },
                 'W' => { toks.push(self.lex_w())},
                 '/' => { self.lex_char(); toks.push(self.lex_identifier()); },
                 '(' => { self.lex_char(); toks.push(self.lex_string()); },
+                '\0' => { self.lex_char(); toks.push(ContentToken::Null); }
+                c if c.is_whitespace() => { self.lex_char(); },
+                c if c.is_numeric() || c == '-' => { toks.push(self.lex_number()); },
                 _ => { toks.push(self.lex_keyword()); }
             };
         }
