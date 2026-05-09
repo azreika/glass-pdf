@@ -139,11 +139,14 @@ impl ContentTokenizer {
     }
 
     fn lex_identifier(&mut self) -> Token {
+        assert_eq!(self.lex_char(), '/');
         let id = self.lex_word();
         return Token::Identifier(id);
     }
 
     fn lex_string(&mut self) -> Token {
+        assert_eq!(self.lex_char(), '(');
+
         let mut bytes = vec![];
         let mut depth = 1;
         while depth > 0 && self.offset < self.data.len() {
@@ -176,20 +179,37 @@ impl ContentTokenizer {
         return Token::Number(number);
     }
 
+    fn lex_null(&mut self) -> Token {
+        assert_eq!(self.lex_char(), '\0');
+        return Token::Null;
+    }
+
+    fn lex_next_value(&mut self) -> Token {
+        if self.peek().is_whitespace() {
+            self.lex_char();
+            return self.lex_next_value();
+        }
+
+        return match self.peek() {
+            'W' => self.lex_w(),
+            '/' => self.lex_identifier(),
+            '(' => self.lex_string(),
+            '\0' => self.lex_null(),
+            c if c.is_numeric() || c == '-' => self.lex_number(),
+            _ => self.lex_keyword(),
+        };
+    }
+
     fn run(&mut self) -> Vec<Token>{
         self.offset = 0;
         let mut toks = vec![];
 
-        while self.offset < self.data.len() {
-            match self.peek() {
-                'W' => { toks.push(self.lex_w())},
-                '/' => { self.lex_char(); toks.push(self.lex_identifier()); },
-                '(' => { self.lex_char(); toks.push(self.lex_string()); },
-                '\0' => { self.lex_char(); toks.push(Token::Null); }
-                c if c.is_whitespace() => { self.lex_char(); },
-                c if c.is_numeric() || c == '-' => { toks.push(self.lex_number()); },
-                _ => { toks.push(self.lex_keyword()); }
-            };
+        while self.has_next() {
+            if self.peek().is_whitespace() {
+                self.lex_char();
+                continue;
+            }
+            toks.push(self.lex_next_value());
         }
         return toks;
     }
