@@ -8,53 +8,34 @@ struct Parser<'a> {
 }
 
 fn is_string(tok: &PdfToken) -> bool {
-    return match tok {
-        PdfToken::String(_) => true,
-        _ => false,
-    }
+    return matches!(tok, PdfToken::String(_));
 }
 
 fn is_identifier(tok: &PdfToken) -> bool {
-    return match tok {
-        PdfToken::Identifier(_) => true,
-        _ => false,
-    }
+    return matches!(tok, PdfToken::Identifier(_));
 }
 
 fn is_num(tok: &PdfToken) -> bool {
-    return match tok {
-        PdfToken::Number(_) => true,
-        _ => false,
-    }
+    return matches!(tok, PdfToken::Number(_));
 }
 
 fn is_bytestream(tok: &PdfToken) -> bool {
-    return match tok {
-        PdfToken::ByteStream(_) => true,
-        _ => false,
-    }
+    return matches!(tok, PdfToken::ByteStream(_));
 }
 
 fn get_id(tok: &PdfToken) -> String {
     return match tok {
         PdfToken::Identifier(x) => x.to_string(),
-        _ => {
-            assert!(false);
-            "".to_string()
-        }
+        _ => panic!(),
     }
 }
 
 fn get_str(tok: &PdfToken) -> String {
     return match tok {
         PdfToken::String(x) => x.to_string(),
-        _ => {
-            assert!(false);
-            "".to_string()
-        }
+        _ => panic!(),
     }
 }
-
 
 fn get_num(tok: &PdfToken) -> f32 {
     return match tok {
@@ -66,10 +47,7 @@ fn get_num(tok: &PdfToken) -> f32 {
 fn get_bytes(tok: &PdfToken) -> Vec<u8> {
     return match tok {
         PdfToken::ByteStream(bytes) => bytes.clone().to_vec(),
-        _ => {
-            assert!(false);
-            vec![]
-        }
+        _ => panic!(),
     }
 }
 
@@ -130,11 +108,7 @@ impl Parser<'_> {
                     start_xref = get_num(&v1);
                     self.eat_expected(PdfToken::EOFKeyword);
                 },
-                _ => {
-                    println!("{:?}", blocks);
-                    println!("{:?}", tok);
-                    assert!(false);
-                },
+                _ => panic!(),
             }
 
         }
