@@ -146,14 +146,7 @@ impl Parser<'_> {
 
     fn expect_end_object(&mut self) {
         let token = self.eat_next_token();
-        if token != PdfToken::EndObjKeyword {
-            println!("Expected end of object, but got `{}`.", token);
-            self.throw_error();
-        }
-    }
-
-    fn throw_error(&self) {
-        panic!("failed");
+        assert_eq!(token, PdfToken::EndObjKeyword, "Expected end of object, but got `{}`.", token);
     }
 
     fn eat_dictionary(&mut self) -> HashMap<String,Value> {
@@ -162,10 +155,7 @@ impl Parser<'_> {
         self.eat_expected(PdfToken::AngleStart);
         self.eat_expected(PdfToken::AngleStart);
 
-        loop {
-            if self.peek() == PdfToken::AngleEnd {
-                break;
-            }
+        while self.peek() != PdfToken::AngleEnd {
             assert!(self.eat_next_token() == PdfToken::ForwardSlash);
             let tok = self.eat_next_token();
             assert!(is_identifier(&tok));
@@ -176,14 +166,6 @@ impl Parser<'_> {
         self.eat_expected(PdfToken::AngleEnd);
         self.eat_expected(PdfToken::AngleEnd);
         return result;
-    }
-
-    #[allow(dead_code)]
-    fn print_debug(&self) {
-        println!("Debug start...");
-        for i in 0..10 {
-            println!("{}", self.peek_nth(i));
-        }
     }
 
     fn read_number(&mut self) -> f32 {
@@ -233,6 +215,14 @@ impl Parser<'_> {
     }
 
     fn eat_value(&mut self) -> Value {
+        match self.peek() {
+            PdfToken::Null => { self.eat_next_token(); return Value::Null },
+            PdfToken::BooleanTrue => { self.eat_next_token(); return Value::Boolean(true) },
+            PdfToken::BooleanFalse => { self.eat_next_token(); return Value::Boolean(false) },
+
+            _ => {},
+        };
+
         if self.peek_is_dict() {
             let result = Value::from_dict(self.eat_dictionary());
             if self.peek() == PdfToken::StreamKeyword {
@@ -297,15 +287,6 @@ impl Parser<'_> {
             let tok = self.eat_next_token();
             assert!(is_identifier(&tok));
             return Value::Identifier(get_id(&tok));
-        } else if self.peek() == PdfToken::BooleanTrue {
-            self.eat_next_token();
-            return Value::Boolean(true);
-        } else if self.peek() == PdfToken::BooleanFalse {
-            self.eat_next_token();
-            return Value::Boolean(false);
-        } else if self.peek() == PdfToken::Null {
-            self.eat_next_token();
-            return Value::Null;
         } else {
             println!("Unexpected value: {:?}", self.peek());
             panic!();
