@@ -236,6 +236,37 @@ mod tests {
             ContentToken::StringBytes(str_bytes("\\(hello\\)")),
         ];
         assert_eq!(actual, expected);
+
+        let actual = run_tokenizer("
+        (hello\\n)
+        ");
+        let expected = vec![
+            ContentToken::StringBytes(str_bytes("hello\\n")),
+        ];
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn w_keywords() {
+        let actual = run_tokenizer("q Q W q Q");
+        let expected = vec![
+            ContentToken::SaveGraphicsState,
+            ContentToken::RestoreGraphicsState,
+            ContentToken::WKeyword,
+            ContentToken::SaveGraphicsState,
+            ContentToken::RestoreGraphicsState,
+        ];
+        assert_eq!(actual, expected);
+
+        let actual = run_tokenizer("q Q W* q Q");
+        let expected = vec![
+            ContentToken::SaveGraphicsState,
+            ContentToken::RestoreGraphicsState,
+            ContentToken::WStarKeyword,
+            ContentToken::SaveGraphicsState,
+            ContentToken::RestoreGraphicsState,
+        ];
+        assert_eq!(actual, expected);
     }
 
     #[test]
