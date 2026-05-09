@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::tokenizer::Tokenizer;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -6,6 +8,7 @@ pub enum Token {
     Identifier(String),
     StringBytes(Vec<u8>),
     Array(Vec<Token>),
+    Dict(HashMap<String,Token>),
 
     SaveGraphicsState,
     RestoreGraphicsState,
@@ -26,8 +29,6 @@ pub enum Token {
     TjKeyword,
     TJKeyword,
     ETKeyword,
-    LBracket,
-    RBracket,
     MKeyword,
     LKeyword,
     HKeyword,
@@ -74,8 +75,6 @@ impl Tokenizer<Token> for ContentTokenizer {
             "Tf" => Token::TfKeyword,
             "Tj" => Token::TjKeyword,
             "ET" => Token::ETKeyword,
-            "[" => Token::LBracket,
-            "]" => Token::RBracket,
             "TJ" => Token::TJKeyword,
             "re" => Token::RectKeyword,
             "m" => Token::MKeyword,
@@ -204,6 +203,21 @@ impl ContentTokenizer {
         return Token::Array(arr);
     }
 
+    fn lex_dict(&mut self) -> Token {
+        let mut result = HashMap::new();
+        assert_eq!(self.lex_char(), '<');
+        self.lex_whitespace();
+
+        while !matches!(self.peek(), '>') {
+            let id = self.lex_word();
+            let value = self.lex_next_value();
+            self.lex_whitespace();
+            result.insert(id, value);
+        }
+        assert_eq!(self.lex_char(), '>');
+        return Token::Dict(result);
+    }
+
     fn lex_next_value(&mut self) -> Token {
         self.lex_whitespace();
         return match self.peek() {
@@ -212,6 +226,7 @@ impl ContentTokenizer {
             '(' => self.lex_string(),
             '\0' => self.lex_null(),
             '[' => self.lex_array(),
+            '<' => self.lex_dict(),
             c if c.is_numeric() || c == '-' => self.lex_number(),
             _ => self.lex_keyword(),
         };

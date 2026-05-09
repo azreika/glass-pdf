@@ -18,7 +18,7 @@ struct TextState {
 enum Value {
     Number(f64),
     Identifier(String),
-    Array(Vec<Box<Value>>),
+    Array(Vec<Value>),
     StringBytes(Vec<u8>),
     Dict(HashMap<String,Value>),
 }
@@ -302,7 +302,7 @@ impl ContentStreamer {
     }
 
 
-    fn pop_array(&mut self) -> Vec<Box<Value>> {
+    fn pop_array(&mut self) -> Vec<Value> {
         return match self.stack.pop().unwrap() {
             Value::Array(arr) => arr,
             other => panic!("expected array, got {:?}", other)
@@ -387,7 +387,7 @@ impl ContentStreamer {
                 let arr = self.pop_array();
                 let mut msgs = vec![];
                 for val in arr {
-                    let msg = match *val {
+                    let msg = match val {
                         Value::Number(x) => {
                             self.move_x(x);
                             Message::Noop
@@ -432,52 +432,35 @@ impl ContentStreamer {
         return multiply_3d(&self.text_state.matrix, &ctm);
     }
 
-    fn parse_value(&mut self) -> Value {
-        let tok = self.next_token();
+    fn tok_to_value(tok: Token) -> Value {
         return match tok {
             Token::Identifier(id) => Value::Identifier(id.to_string()),
             Token::Number(x) => Value::Number(x),
-            Token::LBracket => self.parse_array(),
             Token::StringBytes(bytes) => Value::StringBytes(bytes),
-            Token::AngleOpen => self.parse_dict(),
+            Token::Array(vv) => Value::Array(Self::to_value_array(vv)),
+            Token::Dict(vv) => Value::Dict(Self::to_value_dict(vv)),
             _ => panic!("Unexpected token {:?}", tok),
+        };
+    }
+
+    fn to_value_array(vv: Vec<Token>) -> Vec<Value> {
+        return vv.into_iter().map(|x| Self::tok_to_value(x)).collect();
+    }
+
+    fn to_value_dict(vv: HashMap<String,Token>) -> HashMap<String,Value> {
+        let mut dd = HashMap::new();
+        for (k, v) in vv.into_iter() {
+            dd.insert(k, Self::tok_to_value(v));
         }
+        return dd;
+    }
+
+    fn parse_value(&mut self) -> Value {
+        return Self::tok_to_value(self.next_token());
     }
 
     fn peek(&self) -> Token {
         return self.tokens[self.offset].clone();
-    }
-
-    fn parse_dict(&mut self) -> Value {
-        let mut result = HashMap::new();
-        assert!(matches!(self.next_token(), Token::AngleOpen));
-
-        loop {
-            let id_tok = self.next_token();
-            match id_tok {
-                Token::Identifier(id) => {
-                    let value = self.parse_value();
-                    result.insert(id, value);
-                },
-                Token::AngleClose => break,
-                _ => panic!(),
-            }
-        }
-
-        assert!(matches!(self.next_token(), Token::AngleClose));
-        return Value::Dict(result);
-    }
-
-    fn parse_array(&mut self) -> Value {
-        let mut arr = vec![];
-
-        while !matches!(self.peek(), Token::RBracket) {
-            assert!(!matches!(self.peek(), Token::LBracket));
-            let expr = self.parse_value();
-            arr.push(Box::new(expr));
-        }
-        self.next_token();
-        return Value::Array(arr);
     }
 }
 
