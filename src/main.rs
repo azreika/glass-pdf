@@ -45,7 +45,7 @@ fn main() {
     println!("-----------");
 
     let pages = get_pages(&ast);
-    assert!(pages.len() >= 1);
+    assert!(pages.len() == 1);
     let page = ast.get_object(&pages[0]);
     let contents = page.get("Contents").deref(&ast);
     let ctx = ast.mk_page_ctx(page);

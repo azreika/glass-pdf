@@ -59,6 +59,11 @@ impl TextState {
     }
 }
 
+struct MarkedContentScope {
+    tag: String,
+    dict: HashMap<String, Value>,
+}
+
 pub struct ContentStreamer {
     state: State,
     tokens: Vec<Token>,
@@ -69,6 +74,8 @@ pub struct ContentStreamer {
 
     graphics_state: GraphicsState,
     graphics_state_stack: Vec<GraphicsState>,
+
+    mc_scope_stack: Vec<MarkedContentScope>,
 
     ctx: PageCtx,
 }
@@ -100,6 +107,7 @@ impl ContentStreamer {
             state: State::TopLevel,
             graphics_state_stack: vec![],
             graphics_state: GraphicsState::new(),
+            mc_scope_stack: vec![],
         };
     }
 
@@ -110,7 +118,7 @@ impl ContentStreamer {
 
     fn advance(&mut self) -> Message {
         match self.state {
-            State::TopLevel => {
+            State::TopLevel | State::MarkedContent => {
                 let tok = &self.peek();
 
                 let path_op = self.try_path_op(tok);
@@ -127,13 +135,17 @@ impl ContentStreamer {
                 }
                 return Message::Noop;
             },
-            State::InText => {
+            State::Text => {
                 match self.peek() {
                     // End Text, go back to Top Level
                     Token::ET => {
                         self.next_token();
                         self.reset_text_state();
-                        self.state = State::TopLevel;
+                        self.state = if self.mc_scope_stack.is_empty() {
+                            State::TopLevel
+                        } else {
+                            State::MarkedContent
+                        };
                         return Message::Noop;
                     },
 
@@ -199,7 +211,7 @@ impl ContentStreamer {
     fn try_process_op(&mut self, tok: &Token) -> bool {
         match tok {
             Token::BT => {
-                self.state = State::InText;
+                self.state = State::Text;
                 return true;
             },
             Token::SaveGraphicsState => {
@@ -289,13 +301,30 @@ impl ContentStreamer {
                 println!("TODO: implement H keyword");
                 return true;
             },
-            Token::BMC => {
-                let _dict = self.pop_dict();
-                println!("TODO: implement BMC keyword");
+            Token::BDC => {
+                let dict = self.pop_dict();
+                let tag = self.pop_string();
+                if false {
+                    self.state = State::MarkedContent;
+                    self.mc_scope_stack.push(MarkedContentScope { tag, dict });
+                    println!("TODO: implement BDC keyword");
+                    return true;
+                }
                 return true;
+
             }
             Token::EMC => {
-                println!("TODO: implement EMC keyword");
+                // TODO: add scoping properly
+                if true {
+                    return true;
+                }
+                println!("TODO: reduce BDC keyword");
+                assert_eq!(self.state, State::MarkedContent);
+                assert!(self.mc_scope_stack.len() >= 1);
+                self.mc_scope_stack.pop();
+                if self.mc_scope_stack.is_empty() {
+                    self.state = State::Text;
+                }
                 return true;
             }
             _ => return false,
@@ -650,7 +679,7 @@ fn streamer_state() {
 
     let (messages, fstate) = collect_messages(ctx, toks);
     assert_eq!(messages.len(), 0);
-    assert_eq!(fstate.state, State::InText);
+    assert_eq!(fstate.state, State::Text);
 }
 
 

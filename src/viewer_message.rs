@@ -23,7 +23,8 @@ pub struct GlyphInfo {
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum State {
     TopLevel,
-    InText,
+    Text,
+    MarkedContent,
 }
 
 #[derive(Clone, Debug)]
