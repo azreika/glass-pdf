@@ -23,11 +23,18 @@ enum Value {
     Dict(HashMap<String,Value>),
 }
 
+#[derive(Clone, Debug)]
+enum PathPiece {
+    Rect { x: f64, y: f64, w: f64, h: f64 },
+}
+
 #[derive(Clone,Debug)]
 struct GraphicsState {
     ctm: Matrix,
     cs_nostroke: Option<String>,
     colour_nostroke: Option<Vec<f64>>,
+    path: Vec<PathPiece>,
+    clipping_path: Vec<PathPiece>,
 }
 
 impl GraphicsState {
@@ -36,6 +43,8 @@ impl GraphicsState {
             ctm: Matrix::new(),
             cs_nostroke: None,
             colour_nostroke: None,
+            path: vec![],
+            clipping_path: vec![],
         };
     }
 }
@@ -162,6 +171,13 @@ impl ContentStreamer {
         self.graphics_state.colour_nostroke = Some(vv);
     }
 
+    fn clip_nonwinding(&mut self) {
+        assert_eq!(self.graphics_state.path.len(), 1);
+        assert!(self.graphics_state.clipping_path.is_empty());
+        let rect = self.graphics_state.path[0].clone();
+        self.graphics_state.clipping_path.push(rect);
+    }
+
     fn try_process_op(&mut self, tok: &Token) -> bool {
         match tok {
             Token::BT => {
@@ -177,21 +193,28 @@ impl ContentStreamer {
                 return true;
             },
             Token::Rect => {
-                let _height = self.pop_number();
-                let _width = self.pop_number();
-                let _y = self.pop_number();
-                let _x = self.pop_number();
-                println!("TODO: implement rectangle thing");
+                let height = self.pop_number();
+                let width = self.pop_number();
+                let y = self.pop_number();
+                let x = self.pop_number();
+
+                let rect = PathPiece::Rect { x, y, w: width, h: height };
+                self.graphics_state.path.push(rect);
                 return true;
             },
-            Token::W | Token::WStar => {
+            Token::W => {
                 // Clipping Path Operator
-                println!("TODO: implement clipping path operator W/W*");
+                self.clip_nonwinding();
+                return true;
+            },
+            Token::WStar => {
+                // Clipping Path Operator
+                println!("TODO: implement clipping path operator W*");
                 return true;
             },
             Token::N => {
                 // Clipping Path Operator - end path object without filling it
-                println!("TODO: implement clipping path operator N");
+                self.graphics_state.path.clear();
                 return true;
             },
             Token::CsNoStroke => {
