@@ -88,10 +88,10 @@ impl Viewer {
 }
 
 struct Page {
+    ctx: PageCtx,
     padding_x: f64,
     padding_y: f64,
     glyphs: Vec<GlyphInfo>,
-    ctx: PageCtx,
 }
 
 struct RasterizedGlyph {
@@ -114,7 +114,6 @@ impl Default for PageState {
     fn default() -> Self {
         return PageState {
             zoom_scale: 1.0,
-
             cached_scale_factor: 0.0,
             cached_glyph_count: 0,
             rasterized: vec![],
@@ -149,7 +148,7 @@ fn colourize_bitmap(bitmap: &Vec<u8>, colour: &Option<Vec<f64>>) -> Vec<u8> {
                 }).collect();
             } else {
                 // CMYK?
-                panic!();
+                panic!("unexpected length of colour: {}", bitmap.len());
             }
         },
         None => {
