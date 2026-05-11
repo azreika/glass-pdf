@@ -96,47 +96,37 @@ struct Page {
 
 struct PageState {
     zoom_scale: f64,
-    cached_window_scale_factor: f64,
-    cached_image: Option<iced::widget::image::Handle>,
 }
 
 impl Default for PageState {
     fn default() -> Self {
         return PageState {
             zoom_scale: 1.0,
-            cached_image: None,
-            cached_window_scale_factor: 0.0,
         }
     }
 }
 
-fn colourize_bitmap(bitmap: &Vec<u8>, colour: &Option<Vec<f64>>) -> Vec<u8> {
+fn colourize_pixel(alpha: u8, colour: &Option<Vec<f64>>) -> Vec<u8> {
     match colour {
         Some(vv) => {
             if vv.len() == 3 {
                 // RGB
-                let rgb = vv.iter().map(|a| (a*255.0) as u8).collect::<Vec<u8>>();
-                let rgba: Vec<u8> = bitmap.iter().flat_map(|&a| {
-                    let mut vv = rgb.clone();
-                    vv.push(a);
-                    return vv;
-                }).collect();
+                let mut rgba = vv.iter().map(|a| (a*255.0) as u8).collect::<Vec<u8>>();
+                rgba.push(alpha);
+                println!("rgba {:?}", rgba);
                 return rgba;
             } else if vv.len() == 1 {
                 let g = (vv[0] * 255.0) as u8;
-                // Grayscale
-                return bitmap.iter().flat_map(|&a| {
-                    return [g, g, g, a];
-                }).collect();
+                return [g,g,g,alpha].to_vec();
             } else {
                 // CMYK?
                 panic!();
             }
         },
         None => {
-            return [0,0,0].to_vec();
+            return [0,0,0, alpha].to_vec();
         }
-    };
+    }
 }
 
 impl Page {
@@ -145,6 +135,84 @@ impl Page {
         let outer_rect = canvas::Path::rectangle(Point { x: 0.0, y: 0.0 }, bounds.size());
         f1.fill(&outer_rect, Color::from_rgb(0.8, 0.8, 0.8));
         return f1.into_geometry();
+    }
+
+    fn rasterize_page(&self, state: &PageState) -> iced::widget::image::Handle {
+        let scale_factor = self.ctx.window_scale_factor;
+        println!("redrawing! {scale_factor}");
+
+        // Number of pixels across
+        let page_width = self.ctx.width;
+        // Number of pixels down
+        let page_height = self.ctx.height;
+
+
+        let pixels_per_row = (page_width * scale_factor) as usize;
+        let pixels_per_col = (page_height * scale_factor) as usize;
+
+
+        // Make the page of pixels, defaulting to white, each group of 4 an RGBA channel for one pixel.
+        let mut pixels = vec![255u8; pixels_per_row * pixels_per_col * 4];
+
+        for info in self.glyphs.iter() {
+            let cc = info.byte;
+            let font = self.ctx.font_lib.get_font(&info.font_id);
+            let glyph_id = font.ttf.lookup_glyph_index(cc as char);
+            assert_ne!(glyph_id, 0);
+
+            // Make the font in the size of that many pixels
+            let (metrics, bitmap) = font.ttf.rasterize_indexed(glyph_id, info.size as f32 *scale_factor as f32);
+            if metrics.width == 0 || metrics.height == 0 {
+                continue;
+            }
+            let gap = ((info.width*scale_factor - metrics.width as f64) / 2.0).max(0.0);
+
+            let mut y_pos = page_height * scale_factor;
+            y_pos -= info.y * scale_factor;
+            y_pos -= (metrics.height as i32 + metrics.ymin) as f64;
+
+            let x_pos = info.x * scale_factor + gap;
+
+            for row in 0..metrics.height {
+                for col in 0..metrics.width {
+                    let px = x_pos as i32 + col as i32;
+                    let py = y_pos as i32 + row as i32;
+
+                    if !(px >= 0 && py >= 0 && px <= pixels_per_row as i32 && py <= pixels_per_col as i32) {
+                        panic!("woops? {px} {py}");
+                    }
+
+                    let alpha = bitmap[row*metrics.width + col];
+                    if scale_factor == 2.0 {
+                        // println!("alpha: {alpha} {:?}", info.colour);
+                    }
+                    let rgba = colourize_pixel(alpha, &info.colour);
+
+                    // Each pixel is 4 times the space
+                    let i = (py as usize * pixels_per_row as usize +  px as usize)*4;
+                    let alpha = rgba[3] as f64 / 255.0;
+                    pixels[i]   = ((rgba[0] as f64 * alpha) + (255.0 * (1.0 - alpha))) as u8;
+                    pixels[i+1] = ((rgba[1] as f64 * alpha) + (255.0 * (1.0 - alpha))) as u8;
+                    pixels[i+2] = ((rgba[2] as f64 * alpha) + (255.0 * (1.0 - alpha))) as u8;
+                    pixels[i+3] = 255; // always fully opaque
+                }
+            }
+        }
+        let img_width = pixels_per_row as u32;
+        let img_height = pixels_per_col as u32;
+
+        let img = image::RgbaImage::from_raw(img_width, img_height, pixels).unwrap();
+        let downsampled = image::imageops::resize(
+            &img,
+            page_width as u32,
+            page_height as u32,
+            image::imageops::FilterType::Lanczos3,
+        );
+        return iced::widget::image::Handle::from_rgba(
+            page_width as u32,
+            page_height as u32,
+            downsampled.into_raw(),
+        );
     }
 }
 
@@ -162,7 +230,6 @@ impl <Msg> canvas::Program<Msg> for Page {
         // TODO: these shouldnt be constants
         let page_width = self.ctx.width;
         let page_height = self.ctx.height;
-        let scale_factor = self.ctx.window_scale_factor;
 
         let mut geom: Vec<Geometry> = vec![];
 
@@ -180,44 +247,17 @@ impl <Msg> canvas::Program<Msg> for Page {
         f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
         geom.push(f2.into_geometry());
 
-        for info in self.glyphs.iter() {
-            let mut frame = Frame::new(renderer, bounds.size());
-            let cc = info.byte;
-            let font = self.ctx.font_lib.get_font(&info.font_id);
-            let glyph_id = font.ttf.lookup_glyph_index(cc as char);
-            assert_ne!(glyph_id, 0);
+        let mut frame = Frame::new(renderer, bounds.size());
+        let img = self.rasterize_page(state);
 
-            let (metrics, bitmap) = font.ttf.rasterize_indexed(glyph_id, (info.size*scale_factor) as f32);
-            if metrics.width == 0 || metrics.height == 0 {
-                continue;
-            }
-            let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
-
-            let rgba = colourize_bitmap(&bitmap, &info.colour);
-            let handle = iced::widget::image::Handle::from_rgba(
-                metrics.width as u32,
-                metrics.height as u32,
-                rgba,
-            );
-
-            let mut y_pos = page_height;
-            y_pos -= info.y + self.padding_y;
-            y_pos -= (metrics.height as i32 + metrics.ymin) as f64/scale_factor;
-
-            let x_pos = self.padding_x + info.x + gap;
-
-            let screen_x = x_pos * state.zoom_scale;
-            let screen_y = y_pos * state.zoom_scale;
-
-            frame.draw_image(iced::Rectangle {
-                x: screen_x as f32,
-                y: screen_y as f32,
-                width: ((metrics.width as f64)/scale_factor * state.zoom_scale) as f32,
-                height: ((metrics.height as f64)/scale_factor * state.zoom_scale) as f32,
-            }, &handle);
-
-            geom.push(frame.into_geometry());
-        }
+        let page_bounds = iced::Rectangle {
+            x: self.padding_x as f32,
+            y: self.padding_y as f32,
+            width: page_width as f32,
+            height: page_height as f32,
+        };
+        frame.draw_image(page_bounds, &img);
+        geom.push(frame.into_geometry());
 
         return geom;
     }
