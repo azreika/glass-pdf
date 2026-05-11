@@ -184,27 +184,26 @@ impl Page {
 fn rasterize_glyphs(glyphs: &Vec<GlyphInfo>, scale_factor: f64, ctx: &PageCtx) -> Vec<RasterizedGlyph> {
     let mut vv = vec![];
     for info in glyphs.iter() {
-        let cc = info.byte;
         let font = ctx.font_lib.get_font(&info.font_id);
-
-        let glyph_id = font.ttf.lookup_glyph_index(cc as char);
+        let glyph_id = font.ttf.lookup_glyph_index(info.byte as char);
         assert_ne!(glyph_id, 0);
 
         let (metrics, bitmap) = font.ttf.rasterize_indexed(glyph_id, (info.size*scale_factor) as f32);
         if metrics.width == 0 || metrics.height == 0 {
             continue;
         }
+
         let rgba = colourize_bitmap(&bitmap, &info.colour);
         let handle = iced::widget::image::Handle::from_rgba(
             metrics.width as u32,
             metrics.height as u32,
             rgba,
         );
+
         let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
         let x = info.x + gap;
 
-        let mut y = ctx.height;
-        y -= info.y;
+        let mut y = ctx.height - info.y;
         y -= (metrics.height as i32 + metrics.ymin) as f64/scale_factor;
 
         let w = metrics.width as f64;
