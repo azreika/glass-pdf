@@ -94,18 +94,30 @@ struct Page {
     ctx: PageCtx,
 }
 
+struct RasterizedGlyph {
+    handle: iced::widget::image::Handle,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
 struct PageState {
     zoom_scale: f64,
-    cached_window_scale_factor: f64,
-    cached_image: Option<iced::widget::image::Handle>,
+
+    cached_scale_factor: f64,
+    cached_glyph_count: usize,
+    rasterized: Vec<RasterizedGlyph>,
 }
 
 impl Default for PageState {
     fn default() -> Self {
         return PageState {
             zoom_scale: 1.0,
-            cached_image: None,
-            cached_window_scale_factor: 0.0,
+
+            cached_scale_factor: 0.0,
+            cached_glyph_count: 0,
+            rasterized: vec![],
         }
     }
 }
@@ -148,6 +160,38 @@ impl Page {
     }
 }
 
+fn rasterize_glyphs(glyphs: &Vec<GlyphInfo>, scale_factor: f64, ctx: &PageCtx) -> Vec<RasterizedGlyph> {
+    let mut vv = vec![];
+    for info in glyphs.iter() {
+        let cc = info.byte;
+        let font = ctx.font_lib.get_font(&info.font_id);
+
+        let glyph_id = font.ttf.lookup_glyph_index(cc as char);
+        assert_ne!(glyph_id, 0);
+
+        let (metrics, bitmap) = font.ttf.rasterize_indexed(glyph_id, (info.size*scale_factor) as f32);
+        if metrics.width == 0 || metrics.height == 0 {
+            continue;
+        }
+        let rgba = colourize_bitmap(&bitmap, &info.colour);
+        let handle = iced::widget::image::Handle::from_rgba(
+            metrics.width as u32,
+            metrics.height as u32,
+            rgba,
+        );
+        let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
+        let x = info.x + gap;
+
+        let mut y = ctx.height;
+        y -= info.y;
+        y -= (metrics.height as i32 + metrics.ymin) as f64/scale_factor;
+
+        vv.push(RasterizedGlyph { handle, x, y, w: metrics.width as f64, h: metrics.height as f64 })
+    }
+    return vv;
+
+}
+
 impl <Msg> canvas::Program<Msg> for Page {
     type State = PageState;
 
@@ -176,51 +220,32 @@ impl <Msg> canvas::Program<Msg> for Page {
             height: (page_height * state.zoom_scale) as f32,
         };
 
-        let inner_rect = canvas::Path::rectangle(Point { x: (self.padding_x * state.zoom_scale) as f32, y: (self.padding_y * state.zoom_scale) as f32}, inner_size);
+        let inner_rect = canvas::Path::rectangle(Point { x: 0.0, y:  0.0 }, inner_size);
         f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
         geom.push(f2.into_geometry());
 
-        for info in self.glyphs.iter() {
+        let rglyphs = rasterize_glyphs(&self.glyphs, scale_factor, &self.ctx);
+
+        for info in rglyphs.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
-            let cc = info.byte;
-            let font = self.ctx.font_lib.get_font(&info.font_id);
-            let glyph_id = font.ttf.lookup_glyph_index(cc as char);
-            assert_ne!(glyph_id, 0);
 
-            let (metrics, bitmap) = font.ttf.rasterize_indexed(glyph_id, (info.size*scale_factor) as f32);
-            if metrics.width == 0 || metrics.height == 0 {
-                continue;
-            }
-            let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
-
-            let rgba = colourize_bitmap(&bitmap, &info.colour);
-            let handle = iced::widget::image::Handle::from_rgba(
-                metrics.width as u32,
-                metrics.height as u32,
-                rgba,
-            );
-
-            let mut y_pos = page_height;
-            y_pos -= info.y + self.padding_y;
-            y_pos -= (metrics.height as i32 + metrics.ymin) as f64/scale_factor;
-
-            let x_pos = self.padding_x + info.x + gap;
-
-            let screen_x = x_pos * state.zoom_scale;
-            let screen_y = y_pos * state.zoom_scale;
+            let screen_x = info.x * state.zoom_scale;
+            let screen_y = info.y * state.zoom_scale;
 
             frame.draw_image(iced::Rectangle {
                 x: screen_x as f32,
                 y: screen_y as f32,
-                width: ((metrics.width as f64)/scale_factor * state.zoom_scale) as f32,
-                height: ((metrics.height as f64)/scale_factor * state.zoom_scale) as f32,
-            }, &handle);
+                width: ((info.w as f64)/scale_factor * state.zoom_scale) as f32,
+                height: ((info.h as f64)/scale_factor * state.zoom_scale) as f32,
+            }, &info.handle);
 
             geom.push(frame.into_geometry());
         }
 
         return geom;
     }
+
+    // TODO: remove padding
 
 
     fn update(
