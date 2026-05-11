@@ -122,6 +122,13 @@ impl Default for PageState {
     }
 }
 
+impl PageState {
+    fn scale<T>(&self, x: T) -> f32 where f64: From<T> {
+        let x_f32: f64 = x.into();
+        return (x_f32 as f32) * self.zoom_scale as f32;
+    }
+}
+
 fn colourize_bitmap(bitmap: &Vec<u8>, colour: &Option<Vec<f64>>) -> Vec<u8> {
     match colour {
         Some(vv) => {
@@ -160,13 +167,16 @@ impl Page {
     }
 
     fn mk_page_background(&self, renderer: &Renderer, bounds: iced::Rectangle, state: &PageState) -> Geometry {
-        let scale = |x| return x as f32 * state.zoom_scale as f32;
         let mut f2 = Frame::new(renderer, bounds.size());
         let inner_size = iced::Size {
-            width: scale(self.ctx.width),
-            height: scale(self.ctx.height),
+            width:  state.scale(self.ctx.width),
+            height: state.scale(self.ctx.height),
         };
-        let inner_rect = canvas::Path::rectangle(Point { x: scale(self.padding_x), y:  scale(self.padding_y) }, inner_size);
+        let inner_rect = canvas::Path::rectangle(
+            Point {
+                x: state.scale(self.padding_x),
+                y: state.scale(self.padding_y)
+            }, inner_size);
         f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
         return f2.into_geometry();
     }
@@ -222,8 +232,6 @@ impl <Msg> canvas::Program<Msg> for Page {
         bounds: iced::Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
-        let scale = |x| return x as f32 * state.zoom_scale as f32;
-
         let mut geom: Vec<Geometry> = vec![];
 
         geom.push(self.mk_viewer_background(renderer, bounds));
@@ -233,10 +241,10 @@ impl <Msg> canvas::Program<Msg> for Page {
         for info in state.rasterized.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
             frame.draw_image(iced::Rectangle {
-                x:      scale(info.x + self.padding_x),
-                y:      scale(info.y + self.padding_y),
-                width:  scale(info.w/scale_factor),
-                height: scale(info.h/scale_factor),
+                x:      state.scale(info.x + self.padding_x),
+                y:      state.scale(info.y + self.padding_y),
+                width:  state.scale(info.w/scale_factor),
+                height: state.scale(info.h/scale_factor),
             }, &info.handle);
             geom.push(frame.into_geometry());
         }
