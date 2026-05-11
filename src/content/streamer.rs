@@ -500,7 +500,7 @@ fn dummy_ctx() -> PageCtx {
         font_lib: FontLib {
             id_to_font: HashMap::new(),
         },
-        scale_factor: 1.0,
+        window_scale_factor: 1.0,
         cs_lib: ColourSpaceLib {
             id_to_cs: HashMap::new(),
         },

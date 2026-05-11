@@ -15,7 +15,7 @@ pub struct PageCtx {
     pub height: f64,
     pub width: f64,
     pub font_lib: FontLib,
-    pub scale_factor: f64,
+    pub window_scale_factor: f64,
     pub cs_lib: ColourSpaceLib,
 }
 
@@ -68,7 +68,7 @@ impl Viewer {
                 self.glyphs.push(info);
             },
             Message::SetScaleFactor(x) => {
-                self.ctx.scale_factor = x as f64;
+                self.ctx.window_scale_factor = x as f64;
             },
             Message::Noop => panic!("Noops should have been filtered out"),
         }
@@ -95,13 +95,17 @@ struct Page {
 }
 
 struct PageState {
-    scale: f64,
+    zoom_scale: f64,
+    cached_window_scale_factor: f64,
+    cached_image: Option<iced::widget::image::Handle>,
 }
 
 impl Default for PageState {
     fn default() -> Self {
         return PageState {
-            scale: 1.0,
+            zoom_scale: 1.0,
+            cached_image: None,
+            cached_window_scale_factor: 0.0,
         }
     }
 }
@@ -133,7 +137,15 @@ fn colourize_bitmap(bitmap: &Vec<u8>, colour: &Option<Vec<f64>>) -> Vec<u8> {
             return [0,0,0].to_vec();
         }
     };
+}
 
+impl Page {
+    fn gen_viewer_background(&self, renderer: &Renderer, bounds: iced::Rectangle) -> Geometry {
+        let mut f1 = Frame::new(renderer, bounds.size());
+        let outer_rect = canvas::Path::rectangle(Point { x: 0.0, y: 0.0 }, bounds.size());
+        f1.fill(&outer_rect, Color::from_rgb(0.8, 0.8, 0.8));
+        return f1.into_geometry();
+    }
 }
 
 impl <Msg> canvas::Program<Msg> for Page {
@@ -150,24 +162,21 @@ impl <Msg> canvas::Program<Msg> for Page {
         // TODO: these shouldnt be constants
         let page_width = self.ctx.width;
         let page_height = self.ctx.height;
-        let scale_factor = self.ctx.scale_factor;
+        let scale_factor = self.ctx.window_scale_factor;
 
         let mut geom: Vec<Geometry> = vec![];
 
         // outer rectangle
-        let mut f1 = Frame::new(renderer, bounds.size());
-        let outer_rect = canvas::Path::rectangle(Point { x: 0.0, y: 0.0 }, bounds.size());
-        f1.fill(&outer_rect, Color::from_rgb(0.8, 0.8, 0.8));
-        geom.push(f1.into_geometry());
+        geom.push(self.gen_viewer_background(renderer, bounds));
 
         // inner rectangle
         let mut f2 = Frame::new(renderer, bounds.size());
         let inner_size = iced::Size {
-            width: (page_width * state.scale) as f32,
-            height: (page_height * state.scale) as f32,
+            width: (page_width * state.zoom_scale) as f32,
+            height: (page_height * state.zoom_scale) as f32,
         };
 
-        let inner_rect = canvas::Path::rectangle(Point { x: (self.padding_x * state.scale) as f32, y: (self.padding_y * state.scale) as f32}, inner_size);
+        let inner_rect = canvas::Path::rectangle(Point { x: (self.padding_x * state.zoom_scale) as f32, y: (self.padding_y * state.zoom_scale) as f32}, inner_size);
         f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
         geom.push(f2.into_geometry());
 
@@ -197,14 +206,14 @@ impl <Msg> canvas::Program<Msg> for Page {
 
             let x_pos = self.padding_x + info.x + gap;
 
-            let screen_x = x_pos * state.scale;
-            let screen_y = y_pos * state.scale;
+            let screen_x = x_pos * state.zoom_scale;
+            let screen_y = y_pos * state.zoom_scale;
 
             frame.draw_image(iced::Rectangle {
                 x: screen_x as f32,
                 y: screen_y as f32,
-                width: ((metrics.width as f64)/scale_factor * state.scale) as f32,
-                height: ((metrics.height as f64)/scale_factor * state.scale) as f32,
+                width: ((metrics.width as f64)/scale_factor * state.zoom_scale) as f32,
+                height: ((metrics.height as f64)/scale_factor * state.zoom_scale) as f32,
             }, &handle);
 
             geom.push(frame.into_geometry());
@@ -229,8 +238,8 @@ impl <Msg> canvas::Program<Msg> for Page {
                         if *y == 0.0 {
                             return None;
                         }
-                        state.scale *= 1.0 + *y as f64 * 0.02;
-                        state.scale = state.scale.clamp(0.1, 10.0);
+                        state.zoom_scale *= 1.0 + *y as f64 * 0.02;
+                        state.zoom_scale = state.zoom_scale.clamp(0.1, 10.0);
                         return Some(Action::request_redraw());
                     },
                 }

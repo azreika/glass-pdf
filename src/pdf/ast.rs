@@ -316,7 +316,7 @@ impl Pdf {
             height: page_height,
             width: page_width,
             font_lib: font_lib,
-            scale_factor: 1.0,
+            window_scale_factor: 1.0,
             cs_lib: cs_lib,
         };
     }
