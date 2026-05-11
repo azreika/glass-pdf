@@ -5,7 +5,7 @@ use crate::content::tokenizer::Token;
 use crate::fonts::Font;
 
 use crate::viewer::PageCtx;
-use crate::viewer_message::{GlyphInfo, Message, State};
+use crate::viewer_message::{GlyphInfo, Message, PathInfo, State};
 use crate::transform::{Matrix, multiply_3d};
 
 struct TextState {
@@ -24,7 +24,7 @@ enum Value {
 }
 
 #[derive(Clone, Debug)]
-enum PathPiece {
+pub enum PathPiece {
     Rect { x: f64, y: f64, w: f64, h: f64 },
 }
 
@@ -113,6 +113,12 @@ impl ContentStreamer {
             State::TopLevel => {
                 let tok = &self.peek();
 
+                let path_op = self.try_path_op(tok);
+                if !path_op.is_none() {
+                    self.next_token();
+                    return path_op.unwrap();
+                }
+
                 if self.try_process_op(tok) {
                     self.next_token();
                 } else {
@@ -178,6 +184,18 @@ impl ContentStreamer {
         self.graphics_state.clipping_path.push(rect);
     }
 
+    fn try_path_op(&mut self, tok: &Token) -> Option<Message> {
+        match tok {
+            Token::Fill => {
+                return Some(Message::DrawPath(PathInfo {
+                    path: self.graphics_state.path.clone(),
+                    colour: self.graphics_state.colour_nostroke.clone(),
+                }));
+            },
+            _ => None,
+        }
+    }
+
     fn try_process_op(&mut self, tok: &Token) -> bool {
         match tok {
             Token::BT => {
@@ -235,10 +253,6 @@ impl ContentStreamer {
                 }
                 vv.reverse();
                 self.set_colour_nostroke(vv);
-                return true;
-            },
-            Token::Fill => {
-                println!("TODO: implement colour space operator fill");
                 return true;
             },
             Token::I => {

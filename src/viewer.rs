@@ -5,10 +5,10 @@ use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
 
 use crate::content::tokenizer::Token;
-use crate::content::streamer::{ContentStreamer, stream_content};
+use crate::content::streamer::{ContentStreamer, PathPiece, stream_content};
 use crate::fonts::{Font, FontLib};
 use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
-use crate::viewer_message::{Message,GlyphInfo};
+use crate::viewer_message::{GlyphInfo, Message, PathInfo};
 
 #[derive(Clone,Debug)]
 pub struct PageCtx {
@@ -43,7 +43,7 @@ pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
             let scale_task = iced::window::oldest()
                 .then(|id| iced::window::scale_factor(id.unwrap()))
                 .map(Message::SetScaleFactor);
-            (Viewer { ctx: ctx.clone(), glyphs: vec![] }, Task::batch([task, scale_task]))
+            (Viewer { ctx: ctx.clone(), glyphs: vec![], shapes: vec![], }, Task::batch([task, scale_task]))
         },
         Viewer::update,
         Viewer::view
@@ -54,6 +54,7 @@ pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
 struct Viewer {
     ctx: PageCtx,
     glyphs: Vec<GlyphInfo>,
+    shapes: Vec<PathInfo>,
 }
 
 impl Viewer {
@@ -70,15 +71,19 @@ impl Viewer {
             Message::SetScaleFactor(x) => {
                 self.ctx.window_scale_factor = x as f64;
             },
+            Message::DrawPath(info) => {
+                self.shapes.push(info);
+            },
             Message::Noop => panic!("Noops should have been filtered out"),
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
         return Canvas::new(Page {
-            padding_x: 40.0,
-            padding_y: 20.0,
+            padding_x: 0.0,
+            padding_y: 0.0,
             glyphs: self.glyphs.clone(),
+            shapes: self.shapes.clone(),
             ctx: self.ctx.clone(),
         })
             .width(Length::Fill)
@@ -92,6 +97,7 @@ struct Page {
     padding_x: f64,
     padding_y: f64,
     glyphs: Vec<GlyphInfo>,
+    shapes: Vec<PathInfo>,
 }
 
 struct RasterizedGlyph {
@@ -164,21 +170,6 @@ impl Page {
         f1.fill(&outer_rect, Color::from_rgb(0.8, 0.8, 0.8));
         return f1.into_geometry();
     }
-
-    fn mk_page_background(&self, renderer: &Renderer, bounds: iced::Rectangle, state: &PageState) -> Geometry {
-        let mut f2 = Frame::new(renderer, bounds.size());
-        let inner_size = iced::Size {
-            width:  state.scale(self.ctx.width),
-            height: state.scale(self.ctx.height),
-        };
-        let inner_rect = canvas::Path::rectangle(
-            Point {
-                x: state.scale(self.padding_x),
-                y: state.scale(self.padding_y)
-            }, inner_size);
-        f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
-        return f2.into_geometry();
-    }
 }
 
 fn rasterize_glyphs(glyphs: &Vec<GlyphInfo>, scale_factor: f64, ctx: &PageCtx) -> Vec<RasterizedGlyph> {
@@ -219,6 +210,21 @@ fn refresh_glyphs(state: &mut PageState, glyphs: &Vec<GlyphInfo>, ctx: &PageCtx)
     state.rasterized = rglyphs;
 }
 
+fn mk_colour(colour: &Option<Vec<f64>>) -> Color {
+    if colour.is_none() {
+        return Color::BLACK;
+    }
+    let vv = &colour.as_ref().unwrap();
+    assert_eq!(vv.len(), 1);
+    let g = vv[0] as f32;
+
+    let mut bb = Color::BLACK;
+    bb.r = g;
+    bb.g = g;
+    bb.b = g;
+    return bb;
+}
+
 impl <Msg> canvas::Program<Msg> for Page {
     type State = PageState;
 
@@ -233,8 +239,6 @@ impl <Msg> canvas::Program<Msg> for Page {
         let mut geom: Vec<Geometry> = vec![];
 
         geom.push(self.mk_viewer_background(renderer, bounds));
-        geom.push(self.mk_page_background(renderer, bounds, state));
-
         let scale_factor = self.ctx.window_scale_factor;
         for info in state.rasterized.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
@@ -245,6 +249,24 @@ impl <Msg> canvas::Program<Msg> for Page {
                 height: state.scale(info.h/scale_factor),
             }, &info.handle);
             geom.push(frame.into_geometry());
+        }
+
+        for info in self.shapes.iter() {
+            for rect in &info.path {
+                match *rect {
+                    PathPiece::Rect {x, y, w, h} => {
+                        let mut frame = Frame::new(renderer, bounds.size());
+                        let s = iced::Size {
+                            width: state.scale(w),
+                            height: state.scale(h),
+                        };
+                        let col = mk_colour(&info.colour);
+                        frame.fill_rectangle(Point { x: state.scale(x), y: state.scale(y) }, s, col);
+                        geom.push(frame.into_geometry());
+                    }
+                }
+            }
+
         }
 
         return geom;

@@ -1,8 +1,11 @@
+use crate::content::streamer::PathPiece;
+
 #[derive(Clone, Debug)]
 pub enum Message {
     DrawBlock(Vec<Message>),
     DrawGlyph(GlyphInfo),
     SetScaleFactor(f32),
+    DrawPath(PathInfo),
     Noop,
 }
 
@@ -21,4 +24,10 @@ pub struct GlyphInfo {
 pub enum State {
     TopLevel,
     InText,
+}
+
+#[derive(Clone, Debug)]
+pub struct PathInfo {
+    pub path: Vec<PathPiece>,
+    pub colour: Option<Vec<f64>>,
 }
