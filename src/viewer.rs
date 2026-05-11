@@ -213,6 +213,9 @@ impl <Msg> canvas::Program<Msg> for Page {
         let page_height = self.ctx.height;
         let scale_factor = self.ctx.window_scale_factor;
 
+        let padding_x = self.padding_x * state.zoom_scale;
+        let padding_y = self.padding_y * state.zoom_scale;
+
         let mut geom: Vec<Geometry> = vec![];
 
         // outer rectangle
@@ -225,7 +228,7 @@ impl <Msg> canvas::Program<Msg> for Page {
             height: (page_height * state.zoom_scale) as f32,
         };
 
-        let inner_rect = canvas::Path::rectangle(Point { x: 0.0, y:  0.0 }, inner_size);
+        let inner_rect = canvas::Path::rectangle(Point { x: padding_x as f32, y:  padding_y as f32 }, inner_size);
         f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
         geom.push(f2.into_geometry());
 
@@ -238,8 +241,8 @@ impl <Msg> canvas::Program<Msg> for Page {
             let screen_y = info.y * state.zoom_scale;
 
             frame.draw_image(iced::Rectangle {
-                x: screen_x as f32,
-                y: screen_y as f32,
+                x: screen_x as f32 + padding_x as f32,
+                y: screen_y as f32 + padding_y as f32,
                 width: (info.w/scale_factor * state.zoom_scale) as f32,
                 height: (info.h/scale_factor * state.zoom_scale) as f32,
             }, &info.handle);
@@ -249,9 +252,6 @@ impl <Msg> canvas::Program<Msg> for Page {
 
         return geom;
     }
-
-    // TODO: remove padding
-
 
     fn update(
         &self,
