@@ -152,11 +152,23 @@ fn colourize_bitmap(bitmap: &Vec<u8>, colour: &Option<Vec<f64>>) -> Vec<u8> {
 }
 
 impl Page {
-    fn gen_viewer_background(&self, renderer: &Renderer, bounds: iced::Rectangle) -> Geometry {
+    fn mk_viewer_background(&self, renderer: &Renderer, bounds: iced::Rectangle) -> Geometry {
         let mut f1 = Frame::new(renderer, bounds.size());
         let outer_rect = canvas::Path::rectangle(Point { x: 0.0, y: 0.0 }, bounds.size());
         f1.fill(&outer_rect, Color::from_rgb(0.8, 0.8, 0.8));
         return f1.into_geometry();
+    }
+
+    fn mk_page_background(&self, renderer: &Renderer, bounds: iced::Rectangle, state: &PageState) -> Geometry {
+        let scale = |x| return x as f32 * state.zoom_scale as f32;
+        let mut f2 = Frame::new(renderer, bounds.size());
+        let inner_size = iced::Size {
+            width: scale(self.ctx.width),
+            height: scale(self.ctx.height),
+        };
+        let inner_rect = canvas::Path::rectangle(Point { x: scale(self.padding_x), y:  scale(self.padding_y) }, inner_size);
+        f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
+        return f2.into_geometry();
     }
 }
 
@@ -186,7 +198,9 @@ fn rasterize_glyphs(glyphs: &Vec<GlyphInfo>, scale_factor: f64, ctx: &PageCtx) -
         y -= info.y;
         y -= (metrics.height as i32 + metrics.ymin) as f64/scale_factor;
 
-        vv.push(RasterizedGlyph { handle, x, y, w: metrics.width as f64, h: metrics.height as f64 })
+        let w = metrics.width as f64;
+        let h = metrics.height as f64;
+        vv.push(RasterizedGlyph { handle, x, y, w, h });
     }
     return vv;
 }
@@ -212,18 +226,8 @@ impl <Msg> canvas::Program<Msg> for Page {
 
         let mut geom: Vec<Geometry> = vec![];
 
-        // outer rectangle
-        geom.push(self.gen_viewer_background(renderer, bounds));
-
-        // inner rectangle
-        let mut f2 = Frame::new(renderer, bounds.size());
-        let inner_size = iced::Size {
-            width: scale(self.ctx.width),
-            height: scale(self.ctx.height),
-        };
-        let inner_rect = canvas::Path::rectangle(Point { x: scale(self.padding_x), y:  scale(self.padding_y) }, inner_size);
-        f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
-        geom.push(f2.into_geometry());
+        geom.push(self.mk_viewer_background(renderer, bounds));
+        geom.push(self.mk_page_background(renderer, bounds, state));
 
         let scale_factor = self.ctx.window_scale_factor;
         for info in state.rasterized.iter() {
@@ -261,9 +265,7 @@ impl <Msg> canvas::Program<Msg> for Page {
                 match delta {
                     iced::mouse::ScrollDelta::Lines { y, .. }
                     | iced::mouse::ScrollDelta::Pixels { y, .. } => {
-                        if *y == 0.0 {
-                            return None;
-                        }
+                        if *y == 0.0 { return None; }
                         state.zoom_scale *= 1.0 + *y as f64 * 0.02;
                         state.zoom_scale = state.zoom_scale.clamp(0.1, 10.0);
                         return Some(Action::request_redraw());
