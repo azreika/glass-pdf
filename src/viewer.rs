@@ -208,11 +208,6 @@ impl <Msg> canvas::Program<Msg> for Page {
         bounds: iced::Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
-        // TODO: these shouldnt be constants
-        let page_width = self.ctx.width;
-        let page_height = self.ctx.height;
-        let scale_factor = self.ctx.window_scale_factor;
-
         let scale = |x| return x as f32 * state.zoom_scale as f32;
 
         let mut geom: Vec<Geometry> = vec![];
@@ -223,13 +218,14 @@ impl <Msg> canvas::Program<Msg> for Page {
         // inner rectangle
         let mut f2 = Frame::new(renderer, bounds.size());
         let inner_size = iced::Size {
-            width: scale(page_width),
-            height: scale(page_height),
+            width: scale(self.ctx.width),
+            height: scale(self.ctx.height),
         };
         let inner_rect = canvas::Path::rectangle(Point { x: scale(self.padding_x), y:  scale(self.padding_y) }, inner_size);
         f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
         geom.push(f2.into_geometry());
 
+        let scale_factor = self.ctx.window_scale_factor;
         for info in state.rasterized.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
             frame.draw_image(iced::Rectangle {
