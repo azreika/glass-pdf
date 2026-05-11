@@ -189,7 +189,12 @@ fn rasterize_glyphs(glyphs: &Vec<GlyphInfo>, scale_factor: f64, ctx: &PageCtx) -
         vv.push(RasterizedGlyph { handle, x, y, w: metrics.width as f64, h: metrics.height as f64 })
     }
     return vv;
+}
 
+fn refresh_glyphs(state: &mut PageState, glyphs: &Vec<GlyphInfo>, ctx: &PageCtx) {
+    let rglyphs = rasterize_glyphs(glyphs, state.cached_scale_factor, ctx);
+    state.cached_glyph_count = glyphs.len();
+    state.rasterized = rglyphs;
 }
 
 impl <Msg> canvas::Program<Msg> for Page {
@@ -224,7 +229,7 @@ impl <Msg> canvas::Program<Msg> for Page {
         f2.fill(&inner_rect, Color::from_rgb(1.0, 1.0, 1.0));
         geom.push(f2.into_geometry());
 
-        let rglyphs = rasterize_glyphs(&self.glyphs, scale_factor, &self.ctx);
+        let rglyphs = &state.rasterized;
 
         for info in rglyphs.iter() {
             let mut frame = Frame::new(renderer, bounds.size());
@@ -235,8 +240,8 @@ impl <Msg> canvas::Program<Msg> for Page {
             frame.draw_image(iced::Rectangle {
                 x: screen_x as f32,
                 y: screen_y as f32,
-                width: ((info.w as f64)/scale_factor * state.zoom_scale) as f32,
-                height: ((info.h as f64)/scale_factor * state.zoom_scale) as f32,
+                width: (info.w/scale_factor * state.zoom_scale) as f32,
+                height: (info.h/scale_factor * state.zoom_scale) as f32,
             }, &info.handle);
 
             geom.push(frame.into_geometry());
@@ -255,6 +260,15 @@ impl <Msg> canvas::Program<Msg> for Page {
         _bounds: iced::Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Option<iced::widget::Action<Msg>> {
+        if self.ctx.window_scale_factor != state.cached_scale_factor {
+            state.cached_scale_factor = self.ctx.window_scale_factor;
+            refresh_glyphs(state, &self.glyphs, &self.ctx);
+        }
+
+        if self.glyphs.len() != state.cached_glyph_count {
+            refresh_glyphs(state, &self.glyphs, &self.ctx);
+        }
+
         match event {
             iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta }) => {
                 match delta {
