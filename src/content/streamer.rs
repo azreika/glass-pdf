@@ -120,17 +120,6 @@ fn parse_value(tok: Token) -> Value {
     };
 }
 
-
-fn is_text_op(tok: &Token) -> bool {
-    return
-        matches!(tok, Token::Tm) ||
-        matches!(tok, Token::Tf) ||
-        matches!(tok, Token::Tj) ||
-        matches!(tok, Token::TJ) ||
-        matches!(tok, Token::GS) ||
-        matches!(tok, Token::ET) ;
-}
-
 fn is_value(tok: &Token) -> bool {
     return matches!(tok,
         Token::Identifier(_)    |
@@ -193,8 +182,55 @@ impl ContentStreamer {
                 self.stack.push(parse_value(v));
                 return Message::Noop;
             },
-            tt if is_text_op(&tt) => {
-                return self.process_text_op(&tt);
+            Token::Tm => {
+                let mut mat = vec![];
+                for _ in 0..6 {
+                    mat.push(self.pop_number());
+                }
+                mat.reverse();
+                self.text_state.matrix = Matrix::vec6_to_matrix(&mat);
+                return Message::Noop;
+            },
+            Token::Tf => {
+                let size = self.pop_number();
+                let font = self.pop_string();
+                self.text_state.font = Some(font);
+                self.text_state.size = Some(size);
+                return Message::Noop;
+            },
+            Token::Tj => {
+                // show one
+                let str = self.pop_string_u8();
+                return self.mk_message(str);
+            },
+            Token::TJ => {
+                // show one or mroe
+                let arr = self.pop_array();
+                let mut msgs = vec![];
+                for val in arr {
+                    let msg = match val {
+                        Value::Number(x) => {
+                            self.move_x(x);
+                            Message::Noop
+                        },
+                        Value::StringBytes(vec) => {
+                            self.mk_message(vec)
+                        },
+                        other => panic!("unexpected value {:?}", other),
+                    };
+                    msgs.push(msg);
+                }
+                return self.mk_message_block(msgs);
+            },
+            Token::GS => {
+                let _cs = self.pop_string();
+                println!("TODO: implement gs keyword");
+                return Message::Noop;
+            },
+            Token::ET => {
+                self.reset_text_state();
+                assert!(matches!(self.pop_scope(), Scope::Text));
+                return Message::Noop;
             },
             Token::BT => {
                 self.scopes.push(Scope::Text);
@@ -236,11 +272,6 @@ impl ContentStreamer {
             Token::CsNoStroke => {
                 let cs = self.pop_string();
                 self.set_cs_nostroke(cs);
-                return Message::Noop;
-            },
-            Token::GS => {
-                let _cs = self.pop_string();
-                println!("TODO: implement gs keyword");
                 return Message::Noop;
             },
             Token::SetColourNoStroke => {
@@ -399,67 +430,6 @@ impl ContentStreamer {
     fn mk_message_block(&mut self, msgs: Vec<Message>) -> Message {
         let msgs = msgs.into_iter().filter(|c| !matches!(c, Message::Noop)).collect();
         return Message::DrawBlock(msgs);
-    }
-
-    fn in_text(&self) -> bool {
-        return self.scopes.iter().any(|s| matches!(s, Scope::Text));
-    }
-
-    fn process_text_op(&mut self, tok: &Token) -> Message {
-        assert!(self.in_text());
-        match tok {
-            Token::ET => {
-                self.reset_text_state();
-                assert!(matches!(self.pop_scope(), Scope::Text));
-                return Message::Noop;
-            },
-            Token::Tm => {
-                let mut mat = vec![];
-                for _ in 0..6 {
-                    mat.push(self.pop_number());
-                }
-                mat.reverse();
-                self.text_state.matrix = Matrix::vec6_to_matrix(&mat);
-                return Message::Noop;
-            },
-            Token::Tf => {
-                let size = self.pop_number();
-                let font = self.pop_string();
-                self.text_state.font = Some(font);
-                self.text_state.size = Some(size);
-                return Message::Noop;
-            },
-            Token::Tj => {
-                // show one
-                let str = self.pop_string_u8();
-                return self.mk_message(str);
-            },
-            Token::TJ => {
-                // show one or mroe
-                let arr = self.pop_array();
-                let mut msgs = vec![];
-                for val in arr {
-                    let msg = match val {
-                        Value::Number(x) => {
-                            self.move_x(x);
-                            Message::Noop
-                        },
-                        Value::StringBytes(vec) => {
-                            self.mk_message(vec)
-                        },
-                        other => panic!("unexpected value {:?}", other),
-                    };
-                    msgs.push(msg);
-                }
-                return self.mk_message_block(msgs);
-            },
-            Token::GS => {
-                let _cs = self.pop_string();
-                println!("TODO: implement gs keyword");
-                return Message::Noop;
-            },
-            _ => panic!("Unexpected operator {:?}", tok),
-        }
     }
 
     fn set_x(&mut self, x: f64) {
