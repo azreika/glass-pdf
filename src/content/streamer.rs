@@ -5,7 +5,7 @@ use crate::content::tokenizer::Token;
 use crate::fonts::Font;
 
 use crate::viewer::PageCtx;
-use crate::viewer_message::{GlyphInfo, Message, PathInfo, State};
+use crate::viewer_message::{GlyphInfo, Message, PathInfo};
 use crate::transform::{Matrix, multiply_3d};
 
 struct TextState {
@@ -64,9 +64,9 @@ struct MarkedContentScope {
     dict: HashMap<String, Value>,
 }
 
-#[derive(Clone,Debug,PartialEq)]
+#[derive(Clone,Debug)]
 enum Scope {
-    MarkedContent,
+    MarkedContent { tag: String, dict: HashMap<String, Value> },
     Text,
     TopLevel,
 }
@@ -122,7 +122,7 @@ impl ContentStreamer {
 
     fn pop_scope(&mut self) -> Scope {
         let result = self.scopes.pop().unwrap();
-        assert_ne!(result, Scope::TopLevel);
+        assert!(!matches!(result, Scope::TopLevel));
         return result;
     }
 
@@ -133,7 +133,7 @@ impl ContentStreamer {
 
     fn advance(&mut self) -> Message {
         match self.curr_scope() {
-            Scope::TopLevel | Scope::MarkedContent => {
+            Scope::TopLevel | Scope::MarkedContent { .. } => {
                 let tok = &self.peek();
 
                 let path_op = self.try_path_op(tok);
@@ -315,13 +315,13 @@ impl ContentStreamer {
             Token::BDC => {
                 let dict = self.pop_dict();
                 let tag = self.pop_string();
-                self.scopes.push(Scope::MarkedContent);
+                self.scopes.push(Scope::MarkedContent { tag, dict });
                 println!("TODO: implement BDC keyword");
                 return true;
             }
             Token::EMC => {
                 // TODO: add scoping properly
-                assert!(matches!(self.pop_scope(), Scope::MarkedContent));
+                assert!(matches!(self.pop_scope(), Scope::MarkedContent { .. }));
                 println!("TODO: reduce BDC keyword");
                 return true;
             }

@@ -20,13 +20,6 @@ pub struct GlyphInfo {
     pub colour: Option<Vec<f64>>,
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum State {
-    TopLevel,
-    Text,
-    MarkedContent,
-}
-
 #[derive(Clone, Debug)]
 pub struct PathInfo {
     pub path: Vec<PathPiece>,
