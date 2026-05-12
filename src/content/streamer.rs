@@ -127,48 +127,32 @@ impl ContentStreamer {
 
 
     fn advance(&mut self) -> Message {
-        match self.curr_scope() {
-            Scope::TopLevel | Scope::MarkedContent { .. } => {
-                let tok = &self.peek();
-
-                let path_op = self.try_path_op(tok);
-                if !path_op.is_none() {
-                    self.next_token();
-                    return path_op.unwrap();
-                }
-
-                if self.try_process_op(tok) {
-                    self.next_token();
-                } else {
-                    let value = self.parse_value();
-                    self.stack.push(value);
-                }
-                return Message::Noop;
-            },
-            Scope::Text => {
-                match self.peek() {
-                    // End Text, go back to Top Level
-                    Token::ET => {
-                        self.next_token();
-                        self.reset_text_state();
-                        assert!(matches!(self.pop_scope(), Scope::Text));
-                        return Message::Noop;
-                    },
-
-                    // Keep processing text
-                    _ => {
-                        if self.is_operator(&self.peek()) {
-                            let tok = self.next_token();
-                            let msg = self.process_op(&tok);
-                            return msg;
-                        }
-                        let value = self.parse_value();
-                        self.stack.push(value);
-                        return Message::Noop;
-                    },
-                }
-            },
+        if matches!(self.curr_scope(), Scope::Text) {
+            if self.is_operator(&self.peek()) {
+                let tok = self.next_token();
+                return self.process_op(&tok);
+            }
+            let tok = self.next_token();
+            let value = Self::tok_to_value(tok);
+            self.stack.push(value);
+            return Message::Noop;
         }
+
+        let tok = &self.peek();
+        let path_op = self.try_path_op(tok);
+        if path_op.is_some() {
+            self.next_token();
+            return path_op.unwrap();
+        }
+
+        if self.try_process_op(tok) {
+            self.next_token();
+        } else {
+            let tok = self.next_token();
+            let value = Self::tok_to_value(tok);
+            self.stack.push(value);
+        }
+        return Message::Noop;
     }
 
     fn next_token(&mut self) -> Token {
@@ -183,7 +167,8 @@ impl ContentStreamer {
             matches!(tok, Token::Tf) ||
             matches!(tok, Token::Tj) ||
             matches!(tok, Token::TJ) ||
-            matches!(tok, Token::GS);
+            matches!(tok, Token::GS) ||
+            matches!(tok, Token::ET) ;
     }
 
     fn num_colour_components(&self) -> u8 {
@@ -417,6 +402,11 @@ impl ContentStreamer {
 
     fn process_op(&mut self, tok: &Token) -> Message {
         match tok {
+            Token::ET => {
+                self.reset_text_state();
+                assert!(matches!(self.pop_scope(), Scope::Text));
+                return Message::Noop;
+            },
             Token::Tm => {
                 let mut mat = vec![];
                 for _ in 0..6 {
@@ -671,19 +661,6 @@ fn streamer_state() {
     assert_eq!(messages.len(), 0);
     assert!(matches!(fstate.curr_scope(), Scope::Text));
 }
-
-// #[test]
-// fn simple_scope() {
-//     let ctx = dummy_ctx();
-//     let toks = vec![
-//         Token::BT,
-//     ];
-//     let (messages, fstate) = collect_messages(ctx, toks);
-//     assert_eq!(messages.len(), 0);
-//     assert_eq!(fstate.state, State::Text);
-
-// }
-
 
 #[test]
 fn sample_pdf() {
