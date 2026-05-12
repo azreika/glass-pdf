@@ -64,8 +64,14 @@ struct MarkedContentScope {
     dict: HashMap<String, Value>,
 }
 
+#[derive(Clone,Debug,PartialEq)]
+enum Scope {
+    MarkedContent,
+    Text,
+    TopLevel,
+}
+
 pub struct ContentStreamer {
-    state: State,
     tokens: Vec<Token>,
     stack: Vec<Value>,
     offset: usize,
@@ -75,7 +81,7 @@ pub struct ContentStreamer {
     graphics_state: GraphicsState,
     graphics_state_stack: Vec<GraphicsState>,
 
-    mc_scope_stack: Vec<MarkedContentScope>,
+    scopes: Vec<Scope>,
 
     ctx: PageCtx,
 }
@@ -104,10 +110,9 @@ impl ContentStreamer {
             text_state: TextState::new(),
             ctx,
             stack: vec![],
-            state: State::TopLevel,
             graphics_state_stack: vec![],
             graphics_state: GraphicsState::new(),
-            mc_scope_stack: vec![],
+            scopes: vec![Scope::TopLevel],
         };
     }
 
@@ -115,10 +120,20 @@ impl ContentStreamer {
         self.text_state = TextState::new();
     }
 
+    fn pop_scope(&mut self) -> Scope {
+        let result = self.scopes.pop().unwrap();
+        assert_ne!(result, Scope::TopLevel);
+        return result;
+    }
+
+    fn curr_scope(&self) -> &Scope {
+        return self.scopes.last().unwrap();
+    }
+
 
     fn advance(&mut self) -> Message {
-        match self.state {
-            State::TopLevel | State::MarkedContent => {
+        match self.curr_scope() {
+            Scope::TopLevel | Scope::MarkedContent => {
                 let tok = &self.peek();
 
                 let path_op = self.try_path_op(tok);
@@ -135,17 +150,13 @@ impl ContentStreamer {
                 }
                 return Message::Noop;
             },
-            State::Text => {
+            Scope::Text => {
                 match self.peek() {
                     // End Text, go back to Top Level
                     Token::ET => {
                         self.next_token();
                         self.reset_text_state();
-                        self.state = if self.mc_scope_stack.is_empty() {
-                            State::TopLevel
-                        } else {
-                            State::MarkedContent
-                        };
+                        assert!(matches!(self.pop_scope(), Scope::Text));
                         return Message::Noop;
                     },
 
@@ -211,7 +222,7 @@ impl ContentStreamer {
     fn try_process_op(&mut self, tok: &Token) -> bool {
         match tok {
             Token::BT => {
-                self.state = State::Text;
+                self.scopes.push(Scope::Text);
                 return true;
             },
             Token::SaveGraphicsState => {
@@ -304,27 +315,14 @@ impl ContentStreamer {
             Token::BDC => {
                 let dict = self.pop_dict();
                 let tag = self.pop_string();
-                if false {
-                    self.state = State::MarkedContent;
-                    self.mc_scope_stack.push(MarkedContentScope { tag, dict });
-                    println!("TODO: implement BDC keyword");
-                    return true;
-                }
+                self.scopes.push(Scope::MarkedContent);
+                println!("TODO: implement BDC keyword");
                 return true;
-
             }
             Token::EMC => {
                 // TODO: add scoping properly
-                if true {
-                    return true;
-                }
+                assert!(matches!(self.pop_scope(), Scope::MarkedContent));
                 println!("TODO: reduce BDC keyword");
-                assert_eq!(self.state, State::MarkedContent);
-                assert!(self.mc_scope_stack.len() >= 1);
-                self.mc_scope_stack.pop();
-                if self.mc_scope_stack.is_empty() {
-                    self.state = State::Text;
-                }
                 return true;
             }
             _ => return false,
@@ -667,7 +665,7 @@ fn simple_text() {
         _ => panic!("expected draw block"),
     }
 
-    assert_eq!(fstate.state, State::TopLevel);
+    assert_eq!(*fstate.curr_scope(), Scope::TopLevel);
 }
 
 #[test]
@@ -679,8 +677,20 @@ fn streamer_state() {
 
     let (messages, fstate) = collect_messages(ctx, toks);
     assert_eq!(messages.len(), 0);
-    assert_eq!(fstate.state, State::Text);
+    assert_eq!(*fstate.curr_scope(), Scope::Text);
 }
+
+// #[test]
+// fn simple_scope() {
+//     let ctx = dummy_ctx();
+//     let toks = vec![
+//         Token::BT,
+//     ];
+//     let (messages, fstate) = collect_messages(ctx, toks);
+//     assert_eq!(messages.len(), 0);
+//     assert_eq!(fstate.state, State::Text);
+
+// }
 
 
 #[test]
