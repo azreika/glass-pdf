@@ -26,7 +26,9 @@ enum Value {
 #[derive(Clone, Debug)]
 pub enum PathPiece {
     Rect { x: f64, y: f64, w: f64, h: f64 },
-    Line { x1: f64, y1: f64, x2: f64, y2: f64 },
+    MoveTo { x: f64, y: f64 },
+    LineTo { x: f64, y: f64 },
+    Close,
 }
 
 #[derive(Clone,Debug)]
@@ -61,22 +63,15 @@ impl GraphicsState {
     }
 
     fn move_to(&mut self, x: f64, y: f64) {
-        self.curr_x = x;
-        self.curr_y = y;
+        self.path.push(PathPiece::MoveTo { x, y });
     }
 
     fn line_to(&mut self, x: f64, y: f64) {
-        self.path.push(PathPiece::Line {
-            x1: self.curr_x,
-            x2: x,
-            y1: self.curr_y,
-            y2: y,
-        });
-        self.move_to(x, y);
+        self.path.push(PathPiece::LineTo { x, y });
     }
 
     fn close_path(&mut self) {
-        self.line_to(self.start_x, self.start_y);
+        self.path.push(PathPiece::Close);
     }
 }
 
@@ -314,7 +309,6 @@ impl ContentStreamer {
                     vv.push(self.pop_number());
                 }
                 vv.reverse();
-                println!("setting colour to {:?}", vv);
                 self.set_colour_nostroke(vv);
                 return Message::Noop;
             },
