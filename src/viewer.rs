@@ -128,15 +128,22 @@ impl Default for PageState {
 }
 
 impl PageState {
-    fn scale<T>(&self, x: T) -> f32 where f64: From<T> {
+    fn scale(&self, x: f64) -> f32{
         let x_f32: f64 = x.into();
         return (x_f32 as f32) * self.zoom_scale as f32;
     }
 
-    fn scaled_pt<T>(&self, x: T, y: T) -> Point where f64: From<T> {
+    fn scaled_pt(&self, x: f64, y: f64) -> Point{
         return Point {
             x: self.scale(x),
             y: self.scale(y),
+        };
+    }
+
+    fn scaled_size(&self, w: f64, h: f64) -> iced::Size {
+        return iced::Size {
+            width: self.scale(w),
+            height: self.scale(h),
         };
     }
 }
@@ -281,13 +288,10 @@ impl <Msg> canvas::Program<Msg> for Page {
                             builder.close();
                         },
                         PathPiece::Rect {x, y, w, h} => {
-                            let mut frame = Frame::new(renderer, bounds.size());
-                            let s = iced::Size {
-                                width: state.scale(w),
-                                height: state.scale(h),
-                            };
-                            let col = mk_colour(&info.colour);
-                            builder.rectangle(state.scaled_pt(x, y), s);
+                            builder.rectangle(
+                                state.scaled_pt(x, y),
+                                state.scaled_size(w, h)
+                            );
                         },
                     }
                 }
