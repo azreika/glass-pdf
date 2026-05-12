@@ -97,6 +97,30 @@ pub fn stream_content(p: ContentStreamer) -> impl iced::futures::Stream<Item=Mes
     });
 }
 
+
+fn to_value_array(vv: Vec<Token>) -> Vec<Value> {
+    return vv.into_iter().map(|x| parse_value(x)).collect();
+}
+
+fn to_value_dict(vv: HashMap<String,Token>) -> HashMap<String,Value> {
+    let mut dd = HashMap::new();
+    for (k, v) in vv.into_iter() {
+        dd.insert(k, parse_value(v));
+    }
+    return dd;
+}
+
+fn parse_value(tok: Token) -> Value {
+    return match tok {
+        Token::Identifier(id) => Value::Identifier(id.to_string()),
+        Token::Number(x) => Value::Number(x),
+        Token::StringBytes(bytes) => Value::StringBytes(bytes),
+        Token::Array(vv) => Value::Array(to_value_array(vv)),
+        Token::Dict(vv) => Value::Dict(to_value_dict(vv)),
+        _ => panic!("Unexpected token {:?}", tok),
+    };
+}
+
 impl ContentStreamer {
     pub fn new(ctx: PageCtx, tokens: Vec<Token>) -> Self {
         return Self {
@@ -128,12 +152,11 @@ impl ContentStreamer {
 
     fn advance(&mut self) -> Message {
         if matches!(self.curr_scope(), Scope::Text) {
-            if self.is_operator(&self.peek()) {
-                let tok = self.next_token();
+            let tok = self.next_token();
+            if self.is_operator(&tok) {
                 return self.process_op(&tok);
             }
-            let tok = self.next_token();
-            let value = Self::tok_to_value(tok);
+            let value = parse_value(tok);
             self.stack.push(value);
             return Message::Noop;
         }
@@ -149,7 +172,7 @@ impl ContentStreamer {
             self.next_token();
         } else {
             let tok = self.next_token();
-            let value = Self::tok_to_value(tok);
+            let value = parse_value(tok);
             self.stack.push(value);
         }
         return Message::Noop;
@@ -476,33 +499,6 @@ impl ContentStreamer {
     fn get_effective_ctm(&self) -> Matrix {
         let ctm = self.curr_ctm();
         return multiply_3d(&self.text_state.matrix, &ctm);
-    }
-
-    fn tok_to_value(tok: Token) -> Value {
-        return match tok {
-            Token::Identifier(id) => Value::Identifier(id.to_string()),
-            Token::Number(x) => Value::Number(x),
-            Token::StringBytes(bytes) => Value::StringBytes(bytes),
-            Token::Array(vv) => Value::Array(Self::to_value_array(vv)),
-            Token::Dict(vv) => Value::Dict(Self::to_value_dict(vv)),
-            _ => panic!("Unexpected token {:?}", tok),
-        };
-    }
-
-    fn to_value_array(vv: Vec<Token>) -> Vec<Value> {
-        return vv.into_iter().map(|x| Self::tok_to_value(x)).collect();
-    }
-
-    fn to_value_dict(vv: HashMap<String,Token>) -> HashMap<String,Value> {
-        let mut dd = HashMap::new();
-        for (k, v) in vv.into_iter() {
-            dd.insert(k, Self::tok_to_value(v));
-        }
-        return dd;
-    }
-
-    fn parse_value(&mut self) -> Value {
-        return Self::tok_to_value(self.next_token());
     }
 
     fn peek(&self) -> Token {
