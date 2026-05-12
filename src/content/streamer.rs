@@ -59,11 +59,6 @@ impl TextState {
     }
 }
 
-struct MarkedContentScope {
-    tag: String,
-    dict: HashMap<String, Value>,
-}
-
 #[derive(Clone,Debug)]
 enum Scope {
     MarkedContent { tag: String, dict: HashMap<String, Value> },
@@ -665,7 +660,7 @@ fn simple_text() {
         _ => panic!("expected draw block"),
     }
 
-    assert_eq!(*fstate.curr_scope(), Scope::TopLevel);
+    assert!(matches!(fstate.curr_scope(), Scope::TopLevel));
 }
 
 #[test]
@@ -677,7 +672,7 @@ fn streamer_state() {
 
     let (messages, fstate) = collect_messages(ctx, toks);
     assert_eq!(messages.len(), 0);
-    assert_eq!(*fstate.curr_scope(), Scope::Text);
+    assert!(matches!(fstate.curr_scope(), Scope::Text));
 }
 
 // #[test]
