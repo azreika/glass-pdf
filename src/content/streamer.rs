@@ -97,7 +97,6 @@ pub fn stream_content(p: ContentStreamer) -> impl iced::futures::Stream<Item=Mes
     });
 }
 
-
 fn to_value_array(vv: Vec<Token>) -> Vec<Value> {
     return vv.into_iter().map(|x| parse_value(x)).collect();
 }
@@ -119,6 +118,16 @@ fn parse_value(tok: Token) -> Value {
         Token::Dict(vv) => Value::Dict(to_value_dict(vv)),
         _ => panic!("Unexpected token {:?}", tok),
     };
+}
+
+fn is_value(tok: &Token) -> bool {
+    return matches!(tok,
+        Token::Identifier(_)    |
+        Token::Number(_)        |
+        Token::StringBytes(_)   |
+        Token::Array(_)         |
+        Token::Dict(_)
+    );
 }
 
 impl ContentStreamer {
@@ -153,25 +162,28 @@ impl ContentStreamer {
     fn advance(&mut self) -> Message {
         if matches!(self.curr_scope(), Scope::Text) {
             let tok = self.next_token();
-            if self.is_operator(&tok) {
-                return self.process_text_op(&tok);
+            if is_value(&tok) {
+                let value = parse_value(tok);
+                self.stack.push(value);
+                return Message::Noop;
             }
+            assert!(self.is_operator(&tok));
+            return self.process_op(&tok);
+        }
+
+        let tok = self.next_token();
+        if is_value(&tok) {
             let value = parse_value(tok);
             self.stack.push(value);
             return Message::Noop;
         }
 
-        let tok = self.next_token();
         let path_op = self.try_path_op(&tok);
         if path_op.is_some() {
             return path_op.unwrap();
         }
 
-        if self.try_process_op(&tok) {
-        } else {
-            let value = parse_value(tok);
-            self.stack.push(value);
-        }
+        assert!(self.try_process_op(&tok));
         return Message::Noop;
     }
 
@@ -420,7 +432,7 @@ impl ContentStreamer {
         return Message::DrawBlock(msgs);
     }
 
-    fn process_text_op(&mut self, tok: &Token) -> Message {
+    fn process_op(&mut self, tok: &Token) -> Message {
         match tok {
             Token::ET => {
                 self.reset_text_state();
