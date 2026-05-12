@@ -9,6 +9,12 @@ pub enum Message {
     Noop,
 }
 
+impl Message {
+    pub fn is_noop(&self) -> bool {
+        return matches!(self, Message::Noop);
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GlyphInfo {
     pub x: f64,

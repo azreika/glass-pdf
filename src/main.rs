@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::stdout;
 
 mod tokenizer;
 mod pdf;
@@ -14,6 +15,7 @@ use viewer::view_contents;
 
 use std::env;
 
+use crate::content::pretty::PrettyPrinter;
 use crate::pdf::ast::{Pdf, Value};
 use crate::pdf::parse_pdf;
 
@@ -51,7 +53,8 @@ fn main() {
     let ctx = ast.mk_page_ctx(page);
 
     let decoded_contents = contents.decode();
-    println!("Content:\n{}", contents.decode_to_string());
     let tokenized_contents = tokenize_stream(decoded_contents);
+    PrettyPrinter::pretty_print(&mut stdout(), &tokenized_contents);
+
     view_contents(&ctx, &tokenized_contents);
 }

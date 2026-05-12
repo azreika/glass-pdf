@@ -201,10 +201,10 @@ impl ContentStreamer {
             Token::Tj => {
                 // show one
                 let str = self.pop_string_u8();
-                return self.mk_message(str);
+                return self.mk_show_message(str);
             },
             Token::TJ => {
-                // show one or mroe
+                // show one or more
                 let arr = self.pop_array();
                 let mut msgs = vec![];
                 for val in arr {
@@ -214,7 +214,7 @@ impl ContentStreamer {
                             Message::Noop
                         },
                         Value::StringBytes(vec) => {
-                            self.mk_message(vec)
+                            self.mk_show_message(vec)
                         },
                         other => panic!("unexpected value {:?}", other),
                     };
@@ -227,15 +227,17 @@ impl ContentStreamer {
                 println!("TODO: implement gs keyword");
                 return Message::Noop;
             },
+
+            Token::BT => {
+                self.scopes.push(Scope::Text);
+                return Message::Noop;
+            },
             Token::ET => {
                 self.reset_text_state();
                 assert!(matches!(self.pop_scope(), Scope::Text));
                 return Message::Noop;
             },
-            Token::BT => {
-                self.scopes.push(Scope::Text);
-                return Message::Noop;
-            },
+
             Token::SaveGraphicsState => {
                 self.graphics_state_stack.push(self.graphics_state.clone());
                 return Message::Noop;
@@ -245,12 +247,12 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::Rect => {
-                let height = self.pop_number();
-                let width = self.pop_number();
+                let h = self.pop_number();
+                let w = self.pop_number();
                 let y = self.pop_number();
                 let x = self.pop_number();
 
-                let rect = PathPiece::Rect { x, y, w: width, h: height };
+                let rect = PathPiece::Rect { x, y, w, h };
                 self.graphics_state.path.push(rect);
                 return Message::Noop;
             },
@@ -401,7 +403,7 @@ impl ContentStreamer {
         }
     }
 
-    fn mk_message(&mut self, bytes: Vec<u8>) -> Message {
+    fn mk_show_message(&mut self, bytes: Vec<u8>) -> Message {
         let mut messages = vec![];
 
         for &byte in bytes.iter() {
@@ -428,7 +430,7 @@ impl ContentStreamer {
     }
 
     fn mk_message_block(&mut self, msgs: Vec<Message>) -> Message {
-        let msgs = msgs.into_iter().filter(|c| !matches!(c, Message::Noop)).collect();
+        let msgs = msgs.into_iter().filter(|c| !c.is_noop()).collect();
         return Message::DrawBlock(msgs);
     }
 
