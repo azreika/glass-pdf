@@ -1,7 +1,7 @@
 use iced::widget::Action;
 use iced::{Color, Element, Task};
 use iced;
-use iced::widget::canvas::{self, Canvas, Frame, Geometry};
+use iced::widget::canvas::{self, Canvas, Frame, Geometry, stroke};
 use iced::{Length, Point, Renderer, Theme};
 
 use crate::content::tokenizer::Token;
@@ -132,6 +132,13 @@ impl PageState {
         let x_f32: f64 = x.into();
         return (x_f32 as f32) * self.zoom_scale as f32;
     }
+
+    fn scaled_pt<T>(&self, x: T, y: T) -> Point where f64: From<T> {
+        return Point {
+            x: self.scale(x),
+            y: self.scale(y),
+        };
+    }
 }
 
 fn colourize_bitmap(bitmap: &Vec<u8>, colour: &Option<Vec<f64>>) -> Vec<u8> {
@@ -214,7 +221,16 @@ fn mk_colour(colour: &Option<Vec<f64>>) -> Color {
     if colour.is_none() {
         return Color::BLACK;
     }
+
     let vv = &colour.as_ref().unwrap();
+    if vv.len() == 3 {
+        let mut bb = Color::BLACK;
+        bb.r = vv[0] as f32;
+        bb.g = vv[1] as f32;
+        bb.b = vv[2] as f32;
+        return bb;
+    }
+
     assert_eq!(vv.len(), 1);
     let g = vv[0] as f32;
 
@@ -252,8 +268,8 @@ impl <Msg> canvas::Program<Msg> for Page {
         }
 
         for info in self.shapes.iter() {
-            for rect in &info.path {
-                match *rect {
+            for path in &info.path {
+                match *path {
                     PathPiece::Rect {x, y, w, h} => {
                         let mut frame = Frame::new(renderer, bounds.size());
                         let s = iced::Size {
@@ -261,9 +277,21 @@ impl <Msg> canvas::Program<Msg> for Page {
                             height: state.scale(h),
                         };
                         let col = mk_colour(&info.colour);
-                        frame.fill_rectangle(Point { x: state.scale(x), y: state.scale(y) }, s, col);
+                        frame.fill_rectangle(state.scaled_pt(x, y), s, col);
                         geom.push(frame.into_geometry());
-                    }
+                    },
+                    PathPiece::Line { x1, y1, x2, y2 } => {
+                        let mut frame = Frame::new(renderer, bounds.size());
+                        let iced_path = iced::widget::canvas::Path::line(
+                            state.scaled_pt(x1, y1),
+                            state.scaled_pt(x2, y2),
+                        );
+
+                        let col = mk_colour(&info.colour);
+                        let stroke = iced::widget::canvas::Stroke::default().with_color(col);
+                        frame.stroke(&iced_path, stroke);
+                        geom.push(frame.into_geometry());
+                    },
                 }
             }
 

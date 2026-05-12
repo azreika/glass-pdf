@@ -26,6 +26,7 @@ enum Value {
 #[derive(Clone, Debug)]
 pub enum PathPiece {
     Rect { x: f64, y: f64, w: f64, h: f64 },
+    Line { x1: f64, y1: f64, x2: f64, y2: f64 },
 }
 
 #[derive(Clone,Debug)]
@@ -35,6 +36,12 @@ struct GraphicsState {
     colour_nostroke: Option<Vec<f64>>,
     path: Vec<PathPiece>,
     clipping_path: Vec<PathPiece>,
+
+    curr_x: f64,
+    curr_y: f64,
+
+    start_x: f64,
+    start_y: f64,
 }
 
 impl GraphicsState {
@@ -45,7 +52,31 @@ impl GraphicsState {
             colour_nostroke: None,
             path: vec![],
             clipping_path: vec![],
+            curr_x: 0.0,
+            curr_y: 0.0,
+
+            start_x: 0.0,
+            start_y: 0.0,
         };
+    }
+
+    fn move_to(&mut self, x: f64, y: f64) {
+        self.curr_x = x;
+        self.curr_y = y;
+    }
+
+    fn line_to(&mut self, x: f64, y: f64) {
+        self.path.push(PathPiece::Line {
+            x1: self.curr_x,
+            x2: x,
+            y1: self.curr_y,
+            y2: y,
+        });
+        self.move_to(x, y);
+    }
+
+    fn close_path(&mut self) {
+        self.line_to(self.start_x, self.start_y);
     }
 }
 
@@ -283,6 +314,7 @@ impl ContentStreamer {
                     vv.push(self.pop_number());
                 }
                 vv.reverse();
+                println!("setting colour to {:?}", vv);
                 self.set_colour_nostroke(vv);
                 return Message::Noop;
             },
@@ -302,10 +334,17 @@ impl ContentStreamer {
                 self.graphics_state.ctm = result;
                 return Message::Noop;
             },
-            Token::M | Token::L => {
-                let _y = self.pop_number();
-                let _x = self.pop_number();
-                println!("TODO: implement M and L keyword");
+            Token::M => {
+                // Move To point
+                let y = self.pop_number();
+                let x = self.pop_number();
+                self.graphics_state.move_to(x, y);
+                return Message::Noop;
+            },
+            Token::L => {
+                let y = self.pop_number();
+                let x = self.pop_number();
+                self.graphics_state.line_to(x, y);
                 return Message::Noop;
             },
             Token::V | Token::Y => {
@@ -317,7 +356,7 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::H => {
-                println!("TODO: implement H keyword");
+                self.graphics_state.close_path();
                 return Message::Noop;
             },
             Token::BDC => {
@@ -331,10 +370,12 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::Fill => {
-                return Message::DrawPath(PathInfo {
+                let msg = Message::DrawPath(PathInfo {
                     path: self.graphics_state.path.clone(),
                     colour: self.graphics_state.colour_nostroke.clone(),
                 });
+                self.graphics_state.path.clear();
+                return msg;
             },
             other => panic!("unexpected token: {:?}", other),
         }
