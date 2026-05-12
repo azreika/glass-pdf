@@ -311,13 +311,10 @@ impl ContentStreamer {
                 let dict = self.pop_dict();
                 let tag = self.pop_string();
                 self.scopes.push(Scope::MarkedContent { tag, dict });
-                println!("TODO: implement BDC keyword");
                 return true;
             }
             Token::EMC => {
-                // TODO: add scoping properly
                 assert!(matches!(self.pop_scope(), Scope::MarkedContent { .. }));
-                println!("TODO: reduce BDC keyword");
                 return true;
             }
             _ => return false,
