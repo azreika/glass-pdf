@@ -121,7 +121,7 @@ fn parse_value(tok: Token) -> Value {
 }
 
 
-fn is_text_operator(tok: &Token) -> bool {
+fn is_text_op(tok: &Token) -> bool {
     return
         matches!(tok, Token::Tm) ||
         matches!(tok, Token::Tf) ||
@@ -165,25 +165,9 @@ impl ContentStreamer {
         return result;
     }
 
-    fn curr_scope(&self) -> &Scope {
-        return self.scopes.last().unwrap();
-    }
-
     fn advance(&mut self) -> Message {
         let tok = self.next_token();
-
-        if is_value(&tok) {
-            let value = parse_value(tok);
-            self.stack.push(value);
-            return Message::Noop;
-        }
-
-        if matches!(self.curr_scope(), Scope::Text) {
-            assert!(is_text_operator(&tok));
-            return self.process_text_op(&tok);
-        }
-
-        return self.process_op(&tok);
+        return self.process_op(tok);
     }
 
     fn next_token(&mut self) -> Token {
@@ -208,8 +192,15 @@ impl ContentStreamer {
         self.graphics_state.clipping_path.push(rect);
     }
 
-    fn process_op(&mut self, tok: &Token) -> Message {
+    fn process_op(&mut self, tok: Token) -> Message {
         match tok {
+            v if is_value(&v) => {
+                self.stack.push(parse_value(v));
+                return Message::Noop;
+            },
+            tt if is_text_op(&tt) => {
+                return self.process_text_op(&tt);
+            },
             Token::BT => {
                 self.scopes.push(Scope::Text);
                 return Message::Noop;
@@ -640,7 +631,11 @@ fn simple_text() {
         _ => panic!("expected draw block"),
     }
 
-    assert!(matches!(fstate.curr_scope(), Scope::TopLevel));
+    assert!(matches!(curr_scope(&fstate), Scope::TopLevel));
+}
+
+fn curr_scope(streamer: &ContentStreamer) -> &Scope {
+    return streamer.scopes.last().unwrap();
 }
 
 #[test]
@@ -652,7 +647,7 @@ fn streamer_state() {
 
     let (messages, fstate) = collect_messages(ctx, toks);
     assert_eq!(messages.len(), 0);
-    assert!(matches!(fstate.curr_scope(), Scope::Text));
+    assert!(matches!(curr_scope(&fstate), Scope::Text));
 }
 
 #[test]
