@@ -120,6 +120,17 @@ fn parse_value(tok: Token) -> Value {
     };
 }
 
+
+fn is_text_operator(tok: &Token) -> bool {
+    return
+        matches!(tok, Token::Tm) ||
+        matches!(tok, Token::Tf) ||
+        matches!(tok, Token::Tj) ||
+        matches!(tok, Token::TJ) ||
+        matches!(tok, Token::GS) ||
+        matches!(tok, Token::ET) ;
+}
+
 fn is_value(tok: &Token) -> bool {
     return matches!(tok,
         Token::Identifier(_)    |
@@ -158,49 +169,27 @@ impl ContentStreamer {
         return self.scopes.last().unwrap();
     }
 
-
     fn advance(&mut self) -> Message {
-        if matches!(self.curr_scope(), Scope::Text) {
-            let tok = self.next_token();
-            if is_value(&tok) {
-                let value = parse_value(tok);
-                self.stack.push(value);
-                return Message::Noop;
-            }
-            assert!(self.is_operator(&tok));
-            return self.process_op(&tok);
-        }
-
         let tok = self.next_token();
+
         if is_value(&tok) {
             let value = parse_value(tok);
             self.stack.push(value);
             return Message::Noop;
         }
 
-        let path_op = self.try_path_op(&tok);
-        if path_op.is_some() {
-            return path_op.unwrap();
+        if matches!(self.curr_scope(), Scope::Text) {
+            assert!(is_text_operator(&tok));
+            return self.process_text_op(&tok);
         }
 
-        assert!(self.try_process_op(&tok));
-        return Message::Noop;
+        return self.process_op(&tok);
     }
 
     fn next_token(&mut self) -> Token {
         let tok = self.peek();
         self.offset += 1;
         return tok;
-    }
-
-    fn is_operator(&self, tok: &Token) -> bool {
-        return
-            matches!(tok, Token::Tm) ||
-            matches!(tok, Token::Tf) ||
-            matches!(tok, Token::Tj) ||
-            matches!(tok, Token::TJ) ||
-            matches!(tok, Token::GS) ||
-            matches!(tok, Token::ET) ;
     }
 
     fn num_colour_components(&self) -> u8 {
@@ -219,31 +208,19 @@ impl ContentStreamer {
         self.graphics_state.clipping_path.push(rect);
     }
 
-    fn try_path_op(&mut self, tok: &Token) -> Option<Message> {
-        match tok {
-            Token::Fill => {
-                return Some(Message::DrawPath(PathInfo {
-                    path: self.graphics_state.path.clone(),
-                    colour: self.graphics_state.colour_nostroke.clone(),
-                }));
-            },
-            _ => None,
-        }
-    }
-
-    fn try_process_op(&mut self, tok: &Token) -> bool {
+    fn process_op(&mut self, tok: &Token) -> Message {
         match tok {
             Token::BT => {
                 self.scopes.push(Scope::Text);
-                return true;
+                return Message::Noop;
             },
             Token::SaveGraphicsState => {
                 self.graphics_state_stack.push(self.graphics_state.clone());
-                return true;
+                return Message::Noop;
             },
             Token::RestoreGraphicsState => {
                 self.graphics_state = self.graphics_state_stack.pop().unwrap();
-                return true;
+                return Message::Noop;
             },
             Token::Rect => {
                 let height = self.pop_number();
@@ -253,32 +230,32 @@ impl ContentStreamer {
 
                 let rect = PathPiece::Rect { x, y, w: width, h: height };
                 self.graphics_state.path.push(rect);
-                return true;
+                return Message::Noop;
             },
             Token::W => {
                 // Clipping Path Operator
                 self.clip_nonwinding();
-                return true;
+                return Message::Noop;
             },
             Token::WStar => {
                 // Clipping Path Operator
                 println!("TODO: implement clipping path operator W*");
-                return true;
+                return Message::Noop;
             },
             Token::N => {
                 // Clipping Path Operator - end path object without filling it
                 self.graphics_state.path.clear();
-                return true;
+                return Message::Noop;
             },
             Token::CsNoStroke => {
                 let cs = self.pop_string();
                 self.set_cs_nostroke(cs);
-                return true;
+                return Message::Noop;
             },
             Token::GS => {
                 let _cs = self.pop_string();
                 println!("TODO: implement gs keyword");
-                return true;
+                return Message::Noop;
             },
             Token::SetColourNoStroke => {
                 let num_components = self.num_colour_components();
@@ -288,12 +265,12 @@ impl ContentStreamer {
                 }
                 vv.reverse();
                 self.set_colour_nostroke(vv);
-                return true;
+                return Message::Noop;
             },
             Token::I => {
                 println!("TODO: implement colour space operator flatness I");
                 let _flatness = self.pop_number();
-                return true;
+                return Message::Noop;
             },
             Token::CmStroke => {
                 let mut mat = vec![];
@@ -304,13 +281,13 @@ impl ContentStreamer {
                 let mat = Matrix::vec6_to_matrix(&mat);
                 let result = multiply_3d(self.curr_ctm(), &mat);
                 self.graphics_state.ctm = result;
-                return true;
+                return Message::Noop;
             },
             Token::M | Token::L => {
                 let _y = self.pop_number();
                 let _x = self.pop_number();
                 println!("TODO: implement M and L keyword");
-                return true;
+                return Message::Noop;
             },
             Token::V | Token::Y => {
                 let _x1 = self.pop_number();
@@ -318,23 +295,29 @@ impl ContentStreamer {
                 let _x3 = self.pop_number();
                 let _x4 = self.pop_number();
                 println!("TODO: implement V and Y keyword");
-                return true;
+                return Message::Noop;
             },
             Token::H => {
                 println!("TODO: implement H keyword");
-                return true;
+                return Message::Noop;
             },
             Token::BDC => {
                 let dict = self.pop_dict();
                 let tag = self.pop_string();
                 self.scopes.push(Scope::MarkedContent { tag, dict });
-                return true;
-            }
+                return Message::Noop;
+            },
             Token::EMC => {
                 assert!(matches!(self.pop_scope(), Scope::MarkedContent { .. }));
-                return true;
-            }
-            _ => return false,
+                return Message::Noop;
+            },
+            Token::Fill => {
+                return Message::DrawPath(PathInfo {
+                    path: self.graphics_state.path.clone(),
+                    colour: self.graphics_state.colour_nostroke.clone(),
+                });
+            },
+            _ => panic!("unexpected token: {:?}", tok),
         }
     }
 
@@ -432,7 +415,12 @@ impl ContentStreamer {
         return Message::DrawBlock(msgs);
     }
 
-    fn process_op(&mut self, tok: &Token) -> Message {
+    fn in_text(&self) -> bool {
+        return self.scopes.iter().any(|s| matches!(s, Scope::Text));
+    }
+
+    fn process_text_op(&mut self, tok: &Token) -> Message {
+        assert!(self.in_text());
         match tok {
             Token::ET => {
                 self.reset_text_state();
