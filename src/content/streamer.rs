@@ -154,24 +154,21 @@ impl ContentStreamer {
         if matches!(self.curr_scope(), Scope::Text) {
             let tok = self.next_token();
             if self.is_operator(&tok) {
-                return self.process_op(&tok);
+                return self.process_text_op(&tok);
             }
             let value = parse_value(tok);
             self.stack.push(value);
             return Message::Noop;
         }
 
-        let tok = &self.peek();
-        let path_op = self.try_path_op(tok);
+        let tok = self.next_token();
+        let path_op = self.try_path_op(&tok);
         if path_op.is_some() {
-            self.next_token();
             return path_op.unwrap();
         }
 
-        if self.try_process_op(tok) {
-            self.next_token();
+        if self.try_process_op(&tok) {
         } else {
-            let tok = self.next_token();
             let value = parse_value(tok);
             self.stack.push(value);
         }
@@ -423,7 +420,7 @@ impl ContentStreamer {
         return Message::DrawBlock(msgs);
     }
 
-    fn process_op(&mut self, tok: &Token) -> Message {
+    fn process_text_op(&mut self, tok: &Token) -> Message {
         match tok {
             Token::ET => {
                 self.reset_text_state();
