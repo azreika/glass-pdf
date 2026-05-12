@@ -87,7 +87,7 @@ impl TextState {
 
 #[derive(Clone,Debug)]
 enum Scope {
-    MarkedContent { tag: String, dict: HashMap<String, Value> },
+    MarkedContent { tag: String, dict: Option<HashMap<String, Value>> },
     Text,
     TopLevel,
 }
@@ -196,10 +196,30 @@ impl ContentStreamer {
     }
 
     fn clip_nonwinding(&mut self) {
-        assert_eq!(self.graphics_state.path.len(), 1);
-        assert!(self.graphics_state.clipping_path.is_empty());
-        let rect = self.graphics_state.path[0].clone();
-        self.graphics_state.clipping_path.push(rect);
+        let new_clip = self.graphics_state.path.clone();
+
+        if self.graphics_state.clipping_path.is_empty() {
+            self.graphics_state.clipping_path = new_clip;
+        } else {
+            // Intersect rectangles if both are single rects
+            let existing = &self.graphics_state.clipping_path[0];
+            let incoming = &new_clip[0];
+
+            if let (PathPiece::Rect { x: x1, y: y1, w: w1, h: h1 },
+                    PathPiece::Rect { x: x2, y: y2, w: w2, h: h2 }) = (existing, incoming) {
+                let left   = x1.max(*x2);
+                let bottom = y1.max(*y2);
+                let right  = (x1 + w1).min(x2 + w2);
+                let top    = (y1 + h1).min(y2 + h2);
+
+                self.graphics_state.clipping_path = vec![PathPiece::Rect {
+                    x: left,
+                    y: bottom,
+                    w: (right - left).max(0.0),
+                    h: (top - bottom).max(0.0),
+                }];
+            }
+        }
     }
 
     fn advance(&mut self) -> Message {
@@ -289,7 +309,9 @@ impl ContentStreamer {
             },
             Token::WStar => {
                 // Clipping Path Operator
-                println!("TODO: implement clipping path operator W*");
+                // TODO: make even odd not here
+                self.clip_nonwinding();
+                println!("TODO: implement clipping path operator W*!");
                 return Message::Noop;
             },
             Token::N => {
@@ -356,7 +378,12 @@ impl ContentStreamer {
             Token::BDC => {
                 let dict = self.pop_dict();
                 let tag = self.pop_string();
-                self.scopes.push(Scope::MarkedContent { tag, dict });
+                self.scopes.push(Scope::MarkedContent { tag, dict: Some(dict) });
+                return Message::Noop;
+            },
+            Token::BMC => {
+                let tag = self.pop_string();
+                self.scopes.push(Scope::MarkedContent { tag, dict: None });
                 return Message::Noop;
             },
             Token::EMC => {
@@ -371,6 +398,36 @@ impl ContentStreamer {
                 self.graphics_state.path.clear();
                 return msg;
             },
+            Token::GNonStroke => {
+                // Sets in device gray so 0->1, 1 is white
+                let val = self.pop_number();
+                self.set_colour_nostroke([val].to_vec());
+                return Message::Noop;
+            },
+            Token::GStroke => {
+                // Sets in device gray so 0->1, 1 is white
+                let _val = self.pop_number();
+                println!("implement g stroke!");
+                return Message::Noop;
+            },
+            Token::RGNonStroke => {
+                let _n1 = self.pop_number();
+                let _n2 = self.pop_number();
+                let _n3 = self.pop_number();
+                println!("implement rg non stroke");
+                return Message::Noop;
+            },
+            Token::RGStroke => {
+                let _n1 = self.pop_number();
+                let _n2 = self.pop_number();
+                let _n3 = self.pop_number();
+                println!("implement rg non stroke");
+                return Message::Noop;
+            },
+            Token::Star => {
+                println!("bro this is wrong LOL use f* NOT *");
+                return Message::Noop;
+            }
             other => panic!("unexpected token: {:?}", other),
         }
     }

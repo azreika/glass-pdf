@@ -302,8 +302,12 @@ impl Pdf {
         let fonts = resources.get("Font");
         let font_lib = self.process_fonts(fonts);
 
-        let cs = resources.get("ColorSpace");
-        let cs_lib = self.process_colour_spaces(cs);
+        let maybe_cs = resources.try_get("ColorSpace");
+        let cs_lib = if let Some(cs) = maybe_cs {
+            self.process_colour_spaces(cs)
+        } else {
+            ColourSpaceLib { id_to_cs: HashMap::new() }
+        };
 
         let media_box = page.get("MediaBox").to_vec_f32();
         assert_eq!(media_box.len(), 4);
