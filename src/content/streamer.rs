@@ -165,11 +165,6 @@ impl ContentStreamer {
         return result;
     }
 
-    fn advance(&mut self) -> Message {
-        let tok = self.next_token();
-        return self.process_op(tok);
-    }
-
     fn next_token(&mut self) -> Token {
         let tok = self.peek();
         self.offset += 1;
@@ -192,8 +187,8 @@ impl ContentStreamer {
         self.graphics_state.clipping_path.push(rect);
     }
 
-    fn process_op(&mut self, tok: Token) -> Message {
-        match tok {
+    fn advance(&mut self) -> Message {
+        match self.next_token() {
             v if is_value(&v) => {
                 self.stack.push(parse_value(v));
                 return Message::Noop;
@@ -308,7 +303,7 @@ impl ContentStreamer {
                     colour: self.graphics_state.colour_nostroke.clone(),
                 });
             },
-            _ => panic!("unexpected token: {:?}", tok),
+            other => panic!("unexpected token: {:?}", other),
         }
     }
 
