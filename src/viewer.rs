@@ -254,12 +254,8 @@ impl ApplicationHandler for App {
                     )
                     .unwrap();
                 let mut buf = surface.buffer_mut().unwrap();
-                for (i, pixel) in buf.iter_mut().enumerate() {
-                    let base = i * 4;
-                    let r = pixmap.data()[base] as u32;
-                    let g = pixmap.data()[base + 1] as u32;
-                    let b = pixmap.data()[base + 2] as u32;
-                    *pixel = (r << 16) | (g << 8) | b;
+                for (pixel, src) in buf.iter_mut().zip(pixmap.data().chunks_exact(4)) {
+                    *pixel = ((src[0] as u32) << 16) | ((src[1] as u32) << 8) | src[2] as u32;
                 }
                 buf.present().unwrap();
             }
@@ -269,6 +265,7 @@ impl ApplicationHandler for App {
                 if size.width > 0 && size.height > 0 {
                     self.width = size.width;
                     self.height = size.height;
+                    self.out_pixmap = Some(tiny_skia::Pixmap::new(self.width, self.height).unwrap());
                     self.window.as_ref().unwrap().request_redraw();
                 }
             },
