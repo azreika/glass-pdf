@@ -1,8 +1,13 @@
+use std::sync::Arc;
+
 use iced::widget::Action;
 use iced::{Color, Element, Task};
 use iced;
 use iced::widget::canvas::{self, Canvas, Fill, Frame, Geometry, Path};
 use iced::{Length, Point, Renderer, Theme};
+use winit::application::ApplicationHandler;
+use winit::event::WindowEvent;
+use winit::window::Window;
 
 use crate::content::tokenizer::Token;
 use crate::content::streamer::{ClippingRule, ContentStreamer, PathPiece, stream_content};
@@ -30,8 +35,97 @@ impl PageCtx {
         self.font_lib.id_to_font.insert(font.id.to_string(), font);
     }
 }
+use pixels::{Pixels, SurfaceTexture};
+use winit::{
+    application,
+    event_loop::EventLoop,
+
+};
+use winit::window::{WindowAttributes, WindowId};
+
 
 pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
+    let event_loop = EventLoop::new().unwrap();
+    event_loop.run_app(&mut App::default()).unwrap();
+}
+
+#[derive(Default)]
+struct App<'a> {
+    window: Option<Arc<Window>>,
+    pixels: Option<Pixels<'a>>,
+}
+
+const WIDTH: u32 = 640;
+const HEIGHT: u32 = 480;
+
+// Rectangle to draw
+const RECT_X: u32 = 100;
+const RECT_Y: u32 = 100;
+const RECT_W: u32 = 200;
+const RECT_H: u32 = 150;
+
+
+impl App<'_> {
+    fn draw(&self) {
+    }
+}
+
+impl ApplicationHandler for App<'_> {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let window = Arc::new(
+            event_loop
+                .create_window(Window::default_attributes().with_title("Rectangle"))
+                .unwrap(),
+        );
+
+        let surface_texture = SurfaceTexture::new(WIDTH, HEIGHT, window.clone());
+        let pixels = Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap();
+
+        self.window = Some(window);
+        self.pixels = Some(pixels);
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: WindowId,
+        event: winit::event::WindowEvent,
+    )
+    {
+        match event {
+            WindowEvent::RedrawRequested => {
+                let pixels = self.pixels.as_mut().unwrap();
+                draw(pixels.frame_mut());
+                pixels.render().unwrap();
+                if let Some(win) = &self.window {
+                    win.request_redraw();
+                }
+            },
+            WindowEvent::CloseRequested => event_loop.exit(),
+            _ => {},
+        }
+    }
+}
+
+fn draw(frame: &mut [u8]) {
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            let idx = ((y * WIDTH + x) * 4) as usize;
+            let inside_rect = x >= RECT_X && x < RECT_X + RECT_W
+                && y >= RECT_Y && y < RECT_Y + RECT_H;
+
+            let color = if inside_rect {
+                [0xff, 0x4b, 0x00, 0xff] // orange
+            } else {
+                [0x1a, 0x1a, 0x2e, 0xff] // dark background
+            };
+
+            frame[idx..idx + 4].copy_from_slice(&color);
+        }
+    }
+}
+
+pub fn view_contents2(page_ctx: &PageCtx, tokens: &Vec<Token>) {
     let ctx = page_ctx.clone();
     let toks = tokens.clone();
 
@@ -324,29 +418,6 @@ impl <Msg> canvas::Program<Msg> for Page {
                 style: col.into(),
                 rule,
             });
-        }
-
-        for info in self.clips.iter() {
-            let iced_path = to_iced_path(state, info);
-            let col = Color::from_rgba(0.0, 1.0, 0.0, 0.2);
-            let mut fill_style = Fill::default();
-            fill_style.style = col.into();
-            let clip_rule = match info.rule {
-                ClippingRule::NonWinding => iced::widget::canvas::fill::Rule::NonZero,
-                ClippingRule::EvenOdd => iced::widget::canvas::fill::Rule::EvenOdd,
-            };
-            frame.with_save(|frame| {
-                frame.fill(&iced_path, Fill {
-                    style: Color::TRANSPARENT.into(),
-                    rule: clip_rule,
-                });
-            })
-            // frame.fill(&iced_path, fill_style);
-            // let col = Color::from_rgba(1.0, 0.0, 0.0, 0.2);
-            // frame.fill(&iced_path, col);
-
-
-            // geom.push(frame.into_geometry());
         }
         geom.push(frame.into_geometry());
 
