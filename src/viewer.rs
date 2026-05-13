@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use iced::overlay::menu::default;
 use iced::widget::Action;
 use iced::{Color, Element, Task};
 use iced;
@@ -46,13 +47,14 @@ use winit::window::{WindowAttributes, WindowId};
 
 pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
     let event_loop = EventLoop::new().unwrap();
-    event_loop.run_app(&mut App::default()).unwrap();
+    event_loop.run_app(&mut App::new(page_ctx, tokens)).unwrap();
 }
 
 #[derive(Default)]
 struct App<'a> {
     window: Option<Arc<Window>>,
     pixels: Option<Pixels<'a>>,
+    messages: Vec<Message>,
 }
 
 const WIDTH: u32 = 640;
@@ -64,9 +66,26 @@ const RECT_Y: u32 = 100;
 const RECT_W: u32 = 200;
 const RECT_H: u32 = 150;
 
+fn all_messages(mut p: ContentStreamer) -> Vec<Message> {
+    let mut messages = vec![];
+    while p.offset < p.tokens.len() {
+        let msg = p.advance();
+        if !matches!(msg, Message::Noop) {
+            messages.push(msg);
+        }
+    }
+    return messages;
+}
 
 impl App<'_> {
-    fn draw(&self) {
+    fn new(ctx: &PageCtx, toks: &Vec<Token>) -> Self {
+        let streamer = ContentStreamer::new(ctx.clone(), toks.clone());
+        let messages = all_messages(streamer);
+        return App {
+            window: None,
+            pixels: None,
+            messages,
+        }
     }
 }
 

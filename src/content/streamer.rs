@@ -88,9 +88,9 @@ enum Scope {
 }
 
 pub struct ContentStreamer {
-    tokens: Vec<Token>,
+    pub tokens: Vec<Token>,
     stack: Vec<Value>,
-    offset: usize,
+    pub offset: usize,
 
     text_state: TextState,
 
@@ -190,7 +190,7 @@ impl ContentStreamer {
         self.graphics_state.colour_nostroke = Some(vv);
     }
 
-    fn advance(&mut self) -> Message {
+    pub fn advance(&mut self) -> Message {
         match self.next_token() {
             v if is_value(&v) => {
                 self.stack.push(parse_value(v));
