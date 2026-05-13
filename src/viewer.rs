@@ -1,18 +1,13 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-use iced;
-use iced::widget::Action;
-use iced::widget::canvas::{self, Canvas, Fill, Frame, Geometry, Path};
-use iced::{Color, Element, Task};
-use iced::{Length, Point, Renderer, Theme};
 use softbuffer::{Context, Surface};
 use tiny_skia::Pixmap;
 use winit::application::ApplicationHandler;
 use winit::event::{MouseScrollDelta, WindowEvent};
 use winit::window::Window;
 
-use crate::content::streamer::{ClippingRule, ContentStreamer, PathPiece, stream_content};
+use crate::content::streamer::{ClippingRule, ContentStreamer, PathPiece};
 use crate::content::tokenizer::Token;
 use crate::fonts::{Font, FontLib};
 use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
@@ -23,7 +18,6 @@ pub struct PageCtx {
     pub height: f64,
     pub width: f64,
     pub font_lib: FontLib,
-    pub window_scale_factor: f64,
     pub cs_lib: ColourSpaceLib,
 }
 
@@ -65,8 +59,8 @@ struct App {
 
 impl App {
     fn new(ctx: &PageCtx, toks: &Vec<Token>) -> Self {
-        let streamer = ContentStreamer::new(ctx.clone(), toks.clone());
-        let messages = all_messages(streamer);
+        let mut streamer = ContentStreamer::new(ctx.clone(), toks.clone());
+        let messages = streamer.all_messages();
 
         let mut shapes = vec![];
         let mut glyphs = vec![];
@@ -181,32 +175,6 @@ impl App {
     }
 }
 
-fn all_messages(mut p: ContentStreamer) -> Vec<Message> {
-    let mut messages = vec![];
-    while p.offset < p.tokens.len() {
-        let msg = p.advance();
-        if !matches!(msg, Message::Noop) {
-            messages.push(msg);
-        }
-    }
-    return flatten_messages(messages);
-}
-
-fn flatten_messages(msgs: Vec<Message>) -> Vec<Message> {
-    let mut result = vec![];
-    for msg in msgs.into_iter() {
-        match msg {
-            Message::DrawBlock(inner) => {
-                let mut vv = flatten_messages(inner);
-                result.append(&mut vv);
-            },
-            Message::Noop => panic!("unexpected noop while flattening"),
-            _ => result.push(msg),
-        }
-    }
-    return result;
-}
-
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let window = Arc::new(
@@ -299,63 +267,6 @@ fn to_skia_colour(colour: &Option<Vec<f64>>) -> tiny_skia::Color {
     }
 }
 
-struct Viewer {
-    ctx: PageCtx,
-    glyphs: Vec<GlyphInfo>,
-    shapes: Vec<PathInfo>,
-    clips: Vec<PathInfo>,
-}
-
-struct Page {
-    ctx: PageCtx,
-    padding_x: f64,
-    padding_y: f64,
-    glyphs: Vec<GlyphInfo>,
-    shapes: Vec<PathInfo>,
-    clips: Vec<PathInfo>,
-}
-
-struct RasterizedGlyph {
-    handle: iced::widget::image::Handle,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-}
-
-struct PageState {
-    zoom_scale: f64,
-}
-
-impl Default for PageState {
-    fn default() -> Self {
-        return PageState {
-            zoom_scale: 1.0,
-        };
-    }
-}
-
-impl PageState {
-    fn scale(&self, x: f64) -> f32 {
-        let x_f32: f64 = x.into();
-        return (x_f32 as f32) * self.zoom_scale as f32;
-    }
-
-    fn scaled_pt(&self, x: f64, y: f64) -> Point {
-        return Point {
-            x: self.scale(x),
-            y: self.scale(y),
-        };
-    }
-
-    fn scaled_size(&self, w: f64, h: f64) -> iced::Size {
-        return iced::Size {
-            width: self.scale(w),
-            height: self.scale(h),
-        };
-    }
-}
-
 fn colourize_bitmap(bitmap: &Vec<u8>, colour: &Option<Vec<f64>>) -> Vec<u8> {
     match colour {
         Some(vv) => {
@@ -437,27 +348,4 @@ fn rasterize_glyph_pixels(
         });
     }
     return vv;
-}
-fn mk_colour(colour: &Option<Vec<f64>>) -> Color {
-    if colour.is_none() {
-        return Color::BLACK;
-    }
-
-    let vv = &colour.as_ref().unwrap();
-    if vv.len() == 3 {
-        let mut bb = Color::BLACK;
-        bb.r = vv[0] as f32;
-        bb.g = vv[1] as f32;
-        bb.b = vv[2] as f32;
-        return bb;
-    }
-
-    assert_eq!(vv.len(), 1);
-    let g = vv[0] as f32;
-
-    let mut bb = Color::BLACK;
-    bb.r = g;
-    bb.g = g;
-    bb.b = g;
-    return bb;
 }

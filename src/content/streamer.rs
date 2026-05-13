@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use iced::futures::stream;
 use crate::content::tokenizer::Token;
 use crate::fonts::Font;
 
@@ -102,22 +101,6 @@ pub struct ContentStreamer {
     ctx: PageCtx,
 }
 
-pub fn stream_content(p: ContentStreamer) -> impl iced::futures::Stream<Item=Message> {
-    return stream::unfold(p, |mut parser| async move {
-        iced::futures::future::ready(()).await;
-        loop {
-            if parser.offset >= parser.tokens.len() {
-                return None;
-            }
-            let msg = parser.advance();
-            // Skip noops to avoid redundant drawings
-            if !matches!(msg, Message::Noop) {
-                return Some((msg, parser));
-            }
-        }
-    });
-}
-
 fn to_value_array(vv: Vec<Token>) -> Vec<Value> {
     return vv.into_iter().map(|x| parse_value(x)).collect();
 }
@@ -188,6 +171,17 @@ impl ContentStreamer {
 
     fn set_colour_nostroke(&mut self, vv: Vec<f64>) {
         self.graphics_state.colour_nostroke = Some(vv);
+    }
+
+    pub fn all_messages(&mut self) -> Vec<Message> {
+        let mut messages = vec![];
+        while self.offset < self.tokens.len() {
+            let msg = self.advance();
+            if !matches!(msg, Message::Noop) {
+                messages.push(msg);
+            }
+        }
+        return flatten_messages(messages);
     }
 
     pub fn advance(&mut self) -> Message {
@@ -553,6 +547,21 @@ impl ContentStreamer {
     }
 }
 
+fn flatten_messages(msgs: Vec<Message>) -> Vec<Message> {
+    let mut result = vec![];
+    for msg in msgs.into_iter() {
+        match msg {
+            Message::DrawBlock(inner) => {
+                let mut vv = flatten_messages(inner);
+                result.append(&mut vv);
+            },
+            Message::Noop => panic!("unexpected noop while flattening"),
+            _ => result.push(msg),
+        }
+    }
+    return result;
+}
+
 #[cfg(test)]
 mod tests {
 use std::fs;
@@ -589,7 +598,6 @@ fn dummy_ctx() -> PageCtx {
         font_lib: FontLib {
             id_to_font: HashMap::new(),
         },
-        window_scale_factor: 1.0,
         cs_lib: ColourSpaceLib {
             id_to_cs: HashMap::new(),
         },

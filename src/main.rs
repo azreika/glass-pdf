@@ -101,7 +101,6 @@ fn view_content_stream(filename: String) {
         width: 500.0,
         height: 500.0,
         font_lib: FontLib { id_to_font: HashMap::new() },
-        window_scale_factor: 1.0,
         cs_lib: ColourSpaceLib { id_to_cs: HashMap::new() },
     };
     let tokenized_contents = tokenize_stream(content_bytes);
