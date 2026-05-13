@@ -173,7 +173,13 @@ impl ContentStreamer {
         self.graphics_state.colour_nostroke = Some(vv);
     }
 
-    pub fn all_messages(&mut self) -> Vec<Message> {
+    pub fn process_stream(ctx: &PageCtx, toks: &Vec<Token>) -> Vec<Message> {
+        let mut streamer = ContentStreamer::new(ctx.clone(), toks.clone());
+        let messages = streamer.all_messages();
+        return messages;
+    }
+
+    fn all_messages(&mut self) -> Vec<Message> {
         let mut messages = vec![];
         while self.offset < self.tokens.len() {
             let msg = self.advance();

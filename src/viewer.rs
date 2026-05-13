@@ -59,8 +59,7 @@ struct App {
 
 impl App {
     fn new(ctx: &PageCtx, toks: &Vec<Token>) -> Self {
-        let mut streamer = ContentStreamer::new(ctx.clone(), toks.clone());
-        let messages = streamer.all_messages();
+        let messages = ContentStreamer::process_stream(ctx, toks);
 
         let mut shapes = vec![];
         let mut glyphs = vec![];
