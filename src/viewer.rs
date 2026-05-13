@@ -183,7 +183,7 @@ fn draw_to_pixmap(
     let mut pixmap = tiny_skia::Pixmap::new(width, height).unwrap();
     pixmap.fill(tiny_skia::Color::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
     let transform = tiny_skia::Transform::identity();
-    // let transform = transform.post_scale(scale_factor as f32, scale_factor as f32);
+    let transform = transform.post_scale(scale_factor as f32, scale_factor as f32);
 
     for info in shapes {
         let mut pb = tiny_skia::PathBuilder::new();
@@ -235,7 +235,7 @@ fn draw_to_pixmap(
             glyph.y as i32,
             glyph_pixmap.as_ref(),
             &tiny_skia::PixmapPaint::default(),
-            transform,
+            tiny_skia::Transform::identity(),
             None,
         );
     }
@@ -403,8 +403,8 @@ fn rasterize_glyph_pixels(
 
         vv.push(RasterGlyphPix {
             rgba,
-            x,
-            y,
+            x: x * scale_factor,
+            y: y * scale_factor,
             w: metrics.width as f64,
             h: metrics.height as f64,
         });
