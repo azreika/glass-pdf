@@ -1,7 +1,7 @@
 use iced::widget::Action;
 use iced::{Color, Element, Task};
 use iced;
-use iced::widget::canvas::{self, Canvas, Fill, Frame, Geometry};
+use iced::widget::canvas::{self, Canvas, Fill, Frame, Geometry, Path};
 use iced::{Length, Point, Renderer, Theme};
 
 use crate::content::tokenizer::Token;
@@ -94,6 +94,7 @@ impl Viewer {
             glyphs: self.glyphs.clone(),
             shapes: self.shapes.clone(),
             ctx: self.ctx.clone(),
+            clips: self.clips.clone(),
         })
             .width(Length::Fill)
             .height(Length::Fill)
@@ -107,6 +108,7 @@ struct Page {
     padding_y: f64,
     glyphs: Vec<GlyphInfo>,
     shapes: Vec<PathInfo>,
+    clips: Vec<PathInfo>,
 }
 
 struct RasterizedGlyph {
@@ -230,6 +232,30 @@ fn rasterize_glyphs(glyphs: &Vec<GlyphInfo>, scale_factor: f64, ctx: &PageCtx) -
     return vv;
 }
 
+fn to_iced_path(state: &PageState, info: &PathInfo) -> Path {
+    return iced::widget::canvas::Path::new(|builder| {
+        for piece in &info.path {
+            match *piece {
+                PathPiece::MoveTo { x, y } => {
+                    builder.move_to(state.scaled_pt(x, y));
+                }
+                PathPiece::LineTo { x, y } => {
+                    builder.line_to(state.scaled_pt(x, y));
+                },
+                PathPiece::Close => {
+                    builder.close();
+                },
+                PathPiece::Rect {x, y, w, h} => {
+                    builder.rectangle(
+                        state.scaled_pt(x, y),
+                        state.scaled_size(w, h)
+                    );
+                },
+            }
+        }
+    });
+}
+
 fn refresh_glyphs(state: &mut PageState, glyphs: &Vec<GlyphInfo>, ctx: &PageCtx) {
     let rglyphs = rasterize_glyphs(glyphs, state.cached_scale_factor, ctx);
     state.cached_glyph_count = glyphs.len();
@@ -272,54 +298,57 @@ impl <Msg> canvas::Program<Msg> for Page {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
         let mut geom: Vec<Geometry> = vec![];
-
         geom.push(self.mk_viewer_background(renderer, bounds));
+
         let scale_factor = self.ctx.window_scale_factor;
+        let mut frame = Frame::new(renderer, bounds.size());
         for info in state.rasterized.iter() {
-            let mut frame = Frame::new(renderer, bounds.size());
             frame.draw_image(iced::Rectangle {
                 x:      state.scale(info.x + self.padding_x),
                 y:      state.scale(info.y + self.padding_y),
                 width:  state.scale(info.w/scale_factor),
                 height: state.scale(info.h/scale_factor),
             }, &info.handle);
-            geom.push(frame.into_geometry());
         }
 
         for info in self.shapes.iter() {
-            let iced_path = iced::widget::canvas::Path::new(|builder| {
-                for piece in &info.path {
-                    match *piece {
-                        PathPiece::MoveTo { x, y } => {
-                            builder.move_to(state.scaled_pt(x, y));
-                        }
-                        PathPiece::LineTo { x, y } => {
-                            builder.line_to(state.scaled_pt(x, y));
-                        },
-                        PathPiece::Close => {
-                            builder.close();
-                        },
-                        PathPiece::Rect {x, y, w, h} => {
-                            builder.rectangle(
-                                state.scaled_pt(x, y),
-                                state.scaled_size(w, h)
-                            );
-                        },
-                    }
-                }
-            });
-            let mut frame = Frame::new(renderer, bounds.size());
+            let iced_path = to_iced_path(state, info);
             let col = mk_colour(&info.colour);
             let mut fill_style = Fill::default();
             fill_style.style = col.into();
-            fill_style.rule = match info.rule {
+            let rule = match info.rule {
                 ClippingRule::NonWinding => iced::widget::canvas::fill::Rule::NonZero,
                 ClippingRule::EvenOdd => iced::widget::canvas::fill::Rule::EvenOdd,
-
             };
-            frame.fill(&iced_path, fill_style);
-            geom.push(frame.into_geometry());
+            frame.fill(&iced_path, Fill {
+                style: col.into(),
+                rule,
+            });
         }
+
+        for info in self.clips.iter() {
+            let iced_path = to_iced_path(state, info);
+            let col = Color::from_rgba(0.0, 1.0, 0.0, 0.2);
+            let mut fill_style = Fill::default();
+            fill_style.style = col.into();
+            let clip_rule = match info.rule {
+                ClippingRule::NonWinding => iced::widget::canvas::fill::Rule::NonZero,
+                ClippingRule::EvenOdd => iced::widget::canvas::fill::Rule::EvenOdd,
+            };
+            frame.with_save(|frame| {
+                frame.fill(&iced_path, Fill {
+                    style: Color::TRANSPARENT.into(),
+                    rule: clip_rule,
+                });
+            })
+            // frame.fill(&iced_path, fill_style);
+            // let col = Color::from_rgba(1.0, 0.0, 0.0, 0.2);
+            // frame.fill(&iced_path, col);
+
+
+            // geom.push(frame.into_geometry());
+        }
+        geom.push(frame.into_geometry());
 
         return geom;
     }
