@@ -149,15 +149,6 @@ impl Value {
         }
     }
 
-    pub fn decode_to_string(&self) -> String {
-        let bytes = self.decode();
-        let mut str = String::new();
-        for &b in bytes.iter() {
-            str += &(b as char).to_string();
-        }
-        return str;
-    }
-
     pub fn decode(&self) -> Vec<u8> {
         let bytes = self.bytes();
 

@@ -1,7 +1,7 @@
 use iced::widget::Action;
 use iced::{Color, Element, Task};
 use iced;
-use iced::widget::canvas::{self, Canvas, Frame, Geometry, stroke};
+use iced::widget::canvas::{self, Canvas, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
 
 use crate::content::tokenizer::Token;

@@ -38,12 +38,6 @@ struct GraphicsState {
     colour_nostroke: Option<Vec<f64>>,
     path: Vec<PathPiece>,
     clipping_path: Vec<PathPiece>,
-
-    curr_x: f64,
-    curr_y: f64,
-
-    start_x: f64,
-    start_y: f64,
 }
 
 impl GraphicsState {
@@ -54,11 +48,6 @@ impl GraphicsState {
             colour_nostroke: None,
             path: vec![],
             clipping_path: vec![],
-            curr_x: 0.0,
-            curr_y: 0.0,
-
-            start_x: 0.0,
-            start_y: 0.0,
         };
     }
 
