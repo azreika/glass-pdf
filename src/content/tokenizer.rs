@@ -331,5 +331,4 @@ mod tests {
         // Just check that it doesn't crash
         run_tokenizer(SAMPLE_PDF_STREAM);
     }
-
 }

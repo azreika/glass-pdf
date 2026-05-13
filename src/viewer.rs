@@ -5,7 +5,7 @@ use iced::widget::canvas::{self, Canvas, Fill, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
 
 use crate::content::tokenizer::Token;
-use crate::content::streamer::{ContentStreamer, PathPiece, stream_content};
+use crate::content::streamer::{ClippingRule, ContentStreamer, PathPiece, stream_content};
 use crate::fonts::{Font, FontLib};
 use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
 use crate::viewer_message::{GlyphInfo, Message, PathInfo};
@@ -43,7 +43,12 @@ pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
             let scale_task = iced::window::oldest()
                 .then(|id| iced::window::scale_factor(id.unwrap()))
                 .map(Message::SetScaleFactor);
-            (Viewer { ctx: ctx.clone(), glyphs: vec![], shapes: vec![], }, Task::batch([task, scale_task]))
+            (Viewer {
+                    ctx: ctx.clone(),
+                    glyphs: vec![],
+                    shapes: vec![],
+                    clips: vec![],
+                }, Task::batch([task, scale_task]))
         },
         Viewer::update,
         Viewer::view
@@ -55,6 +60,7 @@ struct Viewer {
     ctx: PageCtx,
     glyphs: Vec<GlyphInfo>,
     shapes: Vec<PathInfo>,
+    clips: Vec<PathInfo>,
 }
 
 impl Viewer {
@@ -75,6 +81,9 @@ impl Viewer {
                 self.shapes.push(info);
             },
             Message::Noop => panic!("Noops should have been filtered out"),
+            Message::Clip(info) => {
+                self.clips.push(info);
+            },
         }
     }
 
@@ -303,7 +312,11 @@ impl <Msg> canvas::Program<Msg> for Page {
             let col = mk_colour(&info.colour);
             let mut fill_style = Fill::default();
             fill_style.style = col.into();
-            fill_style.rule = iced::widget::canvas::fill::Rule::NonZero;
+            fill_style.rule = match info.rule {
+                ClippingRule::NonWinding => iced::widget::canvas::fill::Rule::NonZero,
+                ClippingRule::EvenOdd => iced::widget::canvas::fill::Rule::EvenOdd,
+
+            };
             frame.fill(&iced_path, fill_style);
             geom.push(frame.into_geometry());
         }

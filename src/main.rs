@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::io::stdout;
 
@@ -16,19 +17,10 @@ use viewer::view_contents;
 use std::env;
 
 use crate::content::pretty::PrettyPrinter;
-use crate::pdf::ast::{Pdf, Value};
+use crate::fonts::FontLib;
+use crate::pdf::ast::{ColourSpaceLib, Pdf, Value};
 use crate::pdf::parse_pdf;
-
-fn read_pdf_bytes() -> Vec<u8> {
-    let args: Vec<String> = env::args().collect();
-    let fpath = if args.len() < 2 {
-        "./examples/samplepdf.pdf".to_string()
-    } else {
-        assert_eq!(args.len(), 2);
-        args[1].clone()
-    };
-    return fs::read(fpath).expect("woops");
-}
+use crate::viewer::PageCtx;
 
 fn get_pages(ast: &Pdf) -> &Vec<Value> {
     let trailer = ast.get_trailer_dict();
@@ -40,8 +32,52 @@ fn get_pages(ast: &Pdf) -> &Vec<Value> {
     return kids.get_vec();
 }
 
-fn main() {
-    let pdf_bytes = read_pdf_bytes();
+enum RunType {
+    PDF,
+    ContentStream,
+}
+
+struct RunConfig {
+    filename: String,
+    run_type: RunType,
+}
+
+fn read_args() -> RunConfig {
+    let mut args = env::args();
+
+    // skip program name
+    args.next();
+
+    let mut is_content = false;
+    let mut filename = None;
+    for arg in args {
+        match arg.as_str() {
+            "--content" => is_content = true,
+            other => {
+                assert!(!other.starts_with("-"));
+                assert!(filename.is_none());
+                filename = Some(other.to_string());
+            },
+        }
+    }
+    assert!(!filename.is_none());
+    let filename = filename.unwrap();
+
+    let run_type = if is_content {
+        RunType::ContentStream
+    } else {
+        RunType::PDF
+    };
+
+    return RunConfig {
+        filename,
+        run_type,
+    };
+}
+
+fn view_pdf(filename: String) {
+    let pdf_bytes = fs::read(filename).expect("woops");
+
     let ast = parse_pdf(&pdf_bytes);
     println!("{}", ast);
     println!("-----------");
@@ -57,4 +93,30 @@ fn main() {
     PrettyPrinter::pretty_print(&mut stdout(), &tokenized_contents);
 
     view_contents(&ctx, &tokenized_contents);
+}
+
+fn view_content_stream(filename: String) {
+    let content_bytes = fs::read(filename).expect("woops");
+    let ctx = PageCtx {
+        width: 500.0,
+        height: 500.0,
+        font_lib: FontLib { id_to_font: HashMap::new() },
+        window_scale_factor: 1.0,
+        cs_lib: ColourSpaceLib { id_to_cs: HashMap::new() },
+    };
+    let tokenized_contents = tokenize_stream(content_bytes);
+    view_contents(&ctx, &tokenized_contents);
+}
+
+fn main() {
+    let config = read_args();
+
+    match config.run_type {
+        RunType::PDF => {
+            view_pdf(config.filename);
+        },
+        RunType::ContentStream => {
+            view_content_stream(config.filename);
+        }
+    };
 }

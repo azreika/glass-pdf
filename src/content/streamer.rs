@@ -45,7 +45,6 @@ struct GraphicsState {
     colour_nostroke: Option<Vec<f64>>,
 
     path: Vec<PathPiece>,
-    clipping_path: Vec<(ClippingRule, Vec<PathPiece>)>,
 }
 
 impl GraphicsState {
@@ -55,7 +54,6 @@ impl GraphicsState {
             cs_nostroke: None,
             colour_nostroke: None,
             path: vec![],
-            clipping_path: vec![],
         };
     }
 
@@ -273,14 +271,18 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::W => {
-                let clip = (ClippingRule::NonWinding, self.graphics_state.path.clone());
-                self.graphics_state.clipping_path.push(clip);
-                return Message::Noop;
+                return Message::Clip(PathInfo {
+                    path: self.graphics_state.path.clone(),
+                    colour: None,
+                    rule: ClippingRule::NonWinding,
+                });
             },
             Token::WStar => {
-                let clip = (ClippingRule::EvenOdd, self.graphics_state.path.clone());
-                self.graphics_state.clipping_path.push(clip);
-                return Message::Noop;
+                return Message::Clip(PathInfo {
+                    path: self.graphics_state.path.clone(),
+                    colour: None,
+                    rule: ClippingRule::EvenOdd,
+                });
             },
             Token::N => {
                 // Clipping Path Operator - end path object without filling it
@@ -362,6 +364,7 @@ impl ContentStreamer {
                 let msg = Message::DrawPath(PathInfo {
                     path: self.graphics_state.path.clone(),
                     colour: self.graphics_state.colour_nostroke.clone(),
+                    rule: ClippingRule::NonWinding,
                 });
                 self.graphics_state.path.clear();
                 return msg;

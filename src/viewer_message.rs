@@ -1,4 +1,4 @@
-use crate::content::streamer::PathPiece;
+use crate::content::streamer::{ClippingRule, PathPiece};
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -6,6 +6,7 @@ pub enum Message {
     DrawGlyph(GlyphInfo),
     SetScaleFactor(f32),
     DrawPath(PathInfo),
+    Clip(PathInfo),
     Noop,
 }
 
@@ -30,4 +31,5 @@ pub struct GlyphInfo {
 pub struct PathInfo {
     pub path: Vec<PathPiece>,
     pub colour: Option<Vec<f64>>,
+    pub rule: ClippingRule,
 }
