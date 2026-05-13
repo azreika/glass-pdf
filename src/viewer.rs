@@ -50,11 +50,31 @@ pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
     event_loop.run_app(&mut App::new(page_ctx, tokens)).unwrap();
 }
 
-#[derive(Default)]
 struct App<'a> {
     window: Option<Arc<Window>>,
     pixels: Option<Pixels<'a>>,
-    messages: Vec<Message>,
+    ctx: PageCtx,
+    shapes: Vec<PathInfo>,
+    glyphs: Vec<GlyphInfo>,
+}
+
+impl App<'_> {
+    fn new(ctx: &PageCtx, toks: &Vec<Token>) -> Self {
+        let streamer = ContentStreamer::new(ctx.clone(), toks.clone());
+        let messages = all_messages(streamer);
+
+        let mut shapes = vec![];
+        let mut glyphs = vec![];
+        for msg in messages {
+            match msg {
+                Message::DrawPath(info)  => shapes.push(info),
+                Message::DrawGlyph(info) => glyphs.push(info),
+                _ => {}
+            }
+        }
+
+        App { window: None, pixels: None, ctx: ctx.clone(), shapes, glyphs }
+    }
 }
 
 const WIDTH: u32 = 640;
@@ -75,18 +95,6 @@ fn all_messages(mut p: ContentStreamer) -> Vec<Message> {
         }
     }
     return messages;
-}
-
-impl App<'_> {
-    fn new(ctx: &PageCtx, toks: &Vec<Token>) -> Self {
-        let streamer = ContentStreamer::new(ctx.clone(), toks.clone());
-        let messages = all_messages(streamer);
-        return App {
-            window: None,
-            pixels: None,
-            messages,
-        }
-    }
 }
 
 impl ApplicationHandler for App<'_> {
