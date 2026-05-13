@@ -1,7 +1,7 @@
 use iced::widget::Action;
 use iced::{Color, Element, Task};
 use iced;
-use iced::widget::canvas::{self, Canvas, Frame, Geometry};
+use iced::widget::canvas::{self, Canvas, Fill, Frame, Geometry};
 use iced::{Length, Point, Renderer, Theme};
 
 use crate::content::tokenizer::Token;
@@ -301,7 +301,10 @@ impl <Msg> canvas::Program<Msg> for Page {
             });
             let mut frame = Frame::new(renderer, bounds.size());
             let col = mk_colour(&info.colour);
-            frame.fill(&iced_path, col);
+            let mut fill_style = Fill::default();
+            fill_style.style = col.into();
+            fill_style.rule = iced::widget::canvas::fill::Rule::NonZero;
+            frame.fill(&iced_path, fill_style);
             geom.push(frame.into_geometry());
         }
 

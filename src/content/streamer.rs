@@ -31,13 +31,21 @@ pub enum PathPiece {
     Close,
 }
 
+#[derive(Clone, Debug)]
+pub enum ClippingRule {
+    NonWinding,
+    EvenOdd,
+}
+
 #[derive(Clone,Debug)]
 struct GraphicsState {
     ctm: Matrix,
+
     cs_nostroke: Option<String>,
     colour_nostroke: Option<Vec<f64>>,
+
     path: Vec<PathPiece>,
-    clipping_path: Vec<PathPiece>,
+    clipping_path: Vec<(ClippingRule, Vec<PathPiece>)>,
 }
 
 impl GraphicsState {
@@ -184,33 +192,6 @@ impl ContentStreamer {
         self.graphics_state.colour_nostroke = Some(vv);
     }
 
-    fn clip_nonwinding(&mut self) {
-        let new_clip = self.graphics_state.path.clone();
-
-        if self.graphics_state.clipping_path.is_empty() {
-            self.graphics_state.clipping_path = new_clip;
-        } else {
-            // Intersect rectangles if both are single rects
-            let existing = &self.graphics_state.clipping_path[0];
-            let incoming = &new_clip[0];
-
-            if let (PathPiece::Rect { x: x1, y: y1, w: w1, h: h1 },
-                    PathPiece::Rect { x: x2, y: y2, w: w2, h: h2 }) = (existing, incoming) {
-                let left   = x1.max(*x2);
-                let bottom = y1.max(*y2);
-                let right  = (x1 + w1).min(x2 + w2);
-                let top    = (y1 + h1).min(y2 + h2);
-
-                self.graphics_state.clipping_path = vec![PathPiece::Rect {
-                    x: left,
-                    y: bottom,
-                    w: (right - left).max(0.0),
-                    h: (top - bottom).max(0.0),
-                }];
-            }
-        }
-    }
-
     fn advance(&mut self) -> Message {
         match self.next_token() {
             v if is_value(&v) => {
@@ -292,15 +273,13 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::W => {
-                // Clipping Path Operator
-                self.clip_nonwinding();
+                let clip = (ClippingRule::NonWinding, self.graphics_state.path.clone());
+                self.graphics_state.clipping_path.push(clip);
                 return Message::Noop;
             },
             Token::WStar => {
-                // Clipping Path Operator
-                // TODO: make even odd not here
-                self.clip_nonwinding();
-                println!("TODO: implement clipping path operator W*!");
+                let clip = (ClippingRule::EvenOdd, self.graphics_state.path.clone());
+                self.graphics_state.clipping_path.push(clip);
                 return Message::Noop;
             },
             Token::N => {
@@ -400,10 +379,10 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::RGNonStroke => {
-                let _n1 = self.pop_number();
-                let _n2 = self.pop_number();
-                let _n3 = self.pop_number();
-                println!("implement rg non stroke");
+                let b = self.pop_number();
+                let g = self.pop_number();
+                let r = self.pop_number();
+                self.set_colour_nostroke([r,g,b].to_vec());
                 return Message::Noop;
             },
             Token::RGStroke => {
