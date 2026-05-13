@@ -191,7 +191,10 @@ fn rasterize_glyphs(glyphs: &Vec<GlyphInfo>, scale_factor: f64, ctx: &PageCtx) -
     for info in glyphs.iter() {
         let font = ctx.font_lib.get_font(&info.font_id);
         let glyph_id = font.ttf.lookup_glyph_index(info.byte as char);
-        assert_ne!(glyph_id, 0);
+        if glyph_id == 0 {
+            println!("Glyph not handled: {}", info.byte as char);
+            continue;
+        }
 
         let (metrics, bitmap) = font.ttf.rasterize_indexed(glyph_id, (info.size*scale_factor) as f32);
         if metrics.width == 0 || metrics.height == 0 {

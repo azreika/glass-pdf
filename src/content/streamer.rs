@@ -416,6 +416,35 @@ impl ContentStreamer {
             Token::Star => {
                 println!("bro this is wrong LOL use f* NOT *");
                 return Message::Noop;
+            },
+            Token::WLineWidth => {
+                let _width = self.pop_number();
+                println!("implement line width");
+                return Message::Noop;
+            },
+            Token::LineCap => {
+                let _cap = self.pop_number();
+                println!("implement line cap");
+                return Message::Noop;
+            },
+            Token::LineJoin => {
+                let _join = self.pop_number();
+                println!("implement line join");
+                return Message::Noop;
+            },
+            Token::Stroke => {
+                println!("implement stroke");
+                return Message::Noop;
+            },
+            Token::CharSpacing => {
+                let _spacing = self.pop_number();
+                println!("implement char spacing");
+                return Message::Noop;
+            },
+            Token::Do => {
+                let _name = self.pop_string();
+                println!("implemnet do operator");
+                return Message::Noop;
             }
             other => panic!("unexpected token: {:?}", other),
         }
