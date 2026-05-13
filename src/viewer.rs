@@ -8,7 +8,7 @@ use iced::{Color, Element, Task};
 use iced::{Length, Point, Renderer, Theme};
 use softbuffer::{Context, Surface};
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{MouseScrollDelta, WindowEvent};
 use winit::window::Window;
 
 use crate::content::streamer::{ClippingRule, ContentStreamer, PathPiece, stream_content};
@@ -53,7 +53,10 @@ struct App {
     glyphs: Vec<GlyphInfo>,
     width: u32,
     height: u32,
-    scale_factor: f32,
+
+    zoom_scale: f64,
+    cached_scale_factor: f32,
+    rasterized_glyphs: Vec<RasterGlyphPix>,
 }
 
 impl App {
@@ -75,7 +78,7 @@ impl App {
             }
         }
 
-        App {
+        return App {
             window: None,
             surface: None,
             ctx: ctx.clone(),
@@ -83,8 +86,86 @@ impl App {
             glyphs,
             width: ctx.width as u32,
             height: ctx.height as u32,
-            scale_factor: 1.0,
+            zoom_scale: 1.0,
+
+            cached_scale_factor: 0.0,
+            rasterized_glyphs: vec![],
         }
+    }
+
+    fn scale(&self, x: f64) -> f32 {
+        return x as f32 * self.zoom_scale as f32;
+    }
+
+
+    fn draw_to_pixmap(
+        &self,
+        shapes: &[PathInfo],
+        width: u32,
+        height: u32,
+        rasterized: &Vec<RasterGlyphPix>,
+        scale_factor: f64,
+    ) -> tiny_skia::Pixmap {
+        let mut pixmap = tiny_skia::Pixmap::new(width, height).unwrap();
+        pixmap.fill(tiny_skia::Color::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
+        let transform = tiny_skia::Transform::identity();
+        let transform = transform.post_scale(scale_factor as f32, scale_factor as f32);
+
+        for info in shapes {
+            let mut pb = tiny_skia::PathBuilder::new();
+            for piece in &info.path {
+                match piece {
+                    PathPiece::MoveTo { x, y } => pb.move_to(self.scale(*x), self.scale(*y)),
+                    PathPiece::LineTo { x, y } => pb.line_to(self.scale(*x), self.scale(*y)),
+                    PathPiece::Close => pb.close(),
+                    PathPiece::Rect { x, y, w, h } => {
+                        pb.push_rect(
+                            tiny_skia::Rect::from_xywh(self.scale(*x), self.scale(*y), self.scale(*w), self.scale(*h))
+                                .unwrap(),
+                        );
+                    }
+                }
+            }
+            if let Some(path) = pb.finish() {
+                let col = to_skia_colour(&info.colour);
+                let mut paint = tiny_skia::Paint::default();
+                paint.set_color(col);
+                let rule = match info.rule {
+                    ClippingRule::NonWinding => tiny_skia::FillRule::Winding,
+                    ClippingRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
+                };
+                pixmap.fill_path(&path, &paint, rule, transform, None);
+            }
+        }
+
+        for glyph in rasterized {
+            let mut glyph_pixmap = tiny_skia::Pixmap::new(glyph.w as u32, glyph.h as u32).unwrap();
+            for (dst, src) in glyph_pixmap
+                .pixels_mut()
+                .iter_mut()
+                .zip(glyph.rgba.chunks_exact(4))
+            {
+                let a = src[3] as f32 / 255.0;
+                // premultiply once, here, when writing into the Pixmap
+                *dst = tiny_skia::PremultipliedColorU8::from_rgba(
+                    (src[0] as f32 * a) as u8,
+                    (src[1] as f32 * a) as u8,
+                    (src[2] as f32 * a) as u8,
+                    src[3],
+                )
+                .unwrap();
+            }
+
+            pixmap.draw_pixmap(
+                glyph.x as i32,
+                glyph.y as i32,
+                glyph_pixmap.as_ref(),
+                &tiny_skia::PixmapPaint::default(),
+                tiny_skia::Transform::identity().post_scale(self.zoom_scale as f32, self.zoom_scale as f32),
+                None,
+            );
+        }
+        return pixmap;
     }
 }
 
@@ -126,9 +207,16 @@ impl ApplicationHandler for App {
         let size = window.inner_size();
         self.width = size.width;
         self.height = size.height;
-        self.scale_factor = window.scale_factor() as f32;
+
+        let scale_factor = window.scale_factor() as f32;
+        let rasterized_glyphs =
+                rasterize_glyph_pixels(&self.glyphs, scale_factor as f64, &self.ctx);
+
         self.window = Some(window);
         self.surface = Some(surface);
+
+        self.rasterized_glyphs = rasterized_glyphs;
+        self.cached_scale_factor = scale_factor;
     }
 
     fn window_event(
@@ -139,6 +227,8 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
+                assert_eq!(self.window.as_ref().unwrap().scale_factor(), self.cached_scale_factor as f64);
+                let pixmap = self.draw_to_pixmap(&self.shapes, self.width, self.height, &self.rasterized_glyphs, self.cached_scale_factor as f64);
                 let surface = self.surface.as_mut().unwrap();
                 surface
                     .resize(
@@ -147,9 +237,7 @@ impl ApplicationHandler for App {
                     )
                     .unwrap();
                 let mut buf = surface.buffer_mut().unwrap();
-                let glyphs =
-                    rasterize_glyph_pixels(&self.glyphs, self.scale_factor as f64, &self.ctx);
-                let pixmap = draw_to_pixmap(&self.shapes, self.width, self.height, &glyphs, self.scale_factor as f64);
+
                 for (i, pixel) in buf.iter_mut().enumerate() {
                     let base = i * 4;
                     let r = pixmap.data()[base] as u32;
@@ -167,79 +255,22 @@ impl ApplicationHandler for App {
                     self.height = size.height;
                     self.window.as_ref().unwrap().request_redraw();
                 }
-            }
+            },
+
+            WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
+                let y = match delta {
+                    MouseScrollDelta::LineDelta(y, .. ) => y as f64,
+                    MouseScrollDelta::PixelDelta(y, ..) => y.y,
+                };
+                if y != 0.0 {
+                    self.zoom_scale *= 1.0 + y * 0.02;
+                    self.zoom_scale = self.zoom_scale.clamp(0.1, 10.0);
+                    self.window.as_ref().unwrap().request_redraw();
+                }
+            },
             _ => {}
         }
     }
-}
-
-fn draw_to_pixmap(
-    shapes: &[PathInfo],
-    width: u32,
-    height: u32,
-    rasterized: &Vec<RasterGlyphPix>,
-    scale_factor: f64,
-) -> tiny_skia::Pixmap {
-    let mut pixmap = tiny_skia::Pixmap::new(width, height).unwrap();
-    pixmap.fill(tiny_skia::Color::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
-    let transform = tiny_skia::Transform::identity();
-    let transform = transform.post_scale(scale_factor as f32, scale_factor as f32);
-
-    for info in shapes {
-        let mut pb = tiny_skia::PathBuilder::new();
-        for piece in &info.path {
-            match piece {
-                PathPiece::MoveTo { x, y } => pb.move_to(*x as f32, *y as f32),
-                PathPiece::LineTo { x, y } => pb.line_to(*x as f32, *y as f32),
-                PathPiece::Close => pb.close(),
-                PathPiece::Rect { x, y, w, h } => {
-                    pb.push_rect(
-                        tiny_skia::Rect::from_xywh(*x as f32, *y as f32, *w as f32, *h as f32)
-                            .unwrap(),
-                    );
-                }
-            }
-        }
-        if let Some(path) = pb.finish() {
-            let col = to_skia_colour(&info.colour);
-            let mut paint = tiny_skia::Paint::default();
-            paint.set_color(col);
-            let rule = match info.rule {
-                ClippingRule::NonWinding => tiny_skia::FillRule::Winding,
-                ClippingRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
-            };
-            pixmap.fill_path(&path, &paint, rule, transform, None);
-        }
-    }
-
-    for glyph in rasterized {
-        let mut glyph_pixmap = tiny_skia::Pixmap::new(glyph.w as u32, glyph.h as u32).unwrap();
-        for (dst, src) in glyph_pixmap
-            .pixels_mut()
-            .iter_mut()
-            .zip(glyph.rgba.chunks_exact(4))
-        {
-            let a = src[3] as f32 / 255.0;
-            // premultiply once, here, when writing into the Pixmap
-            *dst = tiny_skia::PremultipliedColorU8::from_rgba(
-                (src[0] as f32 * a) as u8,
-                (src[1] as f32 * a) as u8,
-                (src[2] as f32 * a) as u8,
-                src[3],
-            )
-            .unwrap();
-        }
-
-        pixmap.draw_pixmap(
-            glyph.x as i32,
-            glyph.y as i32,
-            glyph_pixmap.as_ref(),
-            &tiny_skia::PixmapPaint::default(),
-            tiny_skia::Transform::identity(),
-            None,
-        );
-    }
-    return pixmap;
 }
 
 fn to_skia_colour(colour: &Option<Vec<f64>>) -> tiny_skia::Color {
@@ -469,40 +500,6 @@ impl<Msg> canvas::Program<Msg> for Page {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
         let mut geom: Vec<Geometry> = vec![];
-
-        let scale_factor = self.ctx.window_scale_factor;
-        let mut frame = Frame::new(renderer, bounds.size());
-        // for info in state.rasterized.iter() {
-        //     frame.draw_image(
-        //         iced::Rectangle {
-        //             x: state.scale(info.x),
-        //             y: state.scale(info.y),
-        //             width: state.scale(info.w / scale_factor),
-        //             height: state.scale(info.h / scale_factor),
-        //         },
-        //         &info.handle,
-        //     );
-        // }
-
-        for info in self.shapes.iter() {
-            let iced_path = to_iced_path(state, info);
-            let col = mk_colour(&info.colour);
-            let mut fill_style = Fill::default();
-            fill_style.style = col.into();
-            let rule = match info.rule {
-                ClippingRule::NonWinding => iced::widget::canvas::fill::Rule::NonZero,
-                ClippingRule::EvenOdd => iced::widget::canvas::fill::Rule::EvenOdd,
-            };
-            frame.fill(
-                &iced_path,
-                Fill {
-                    style: col.into(),
-                    rule,
-                },
-            );
-        }
-        geom.push(frame.into_geometry());
-
         return geom;
     }
 
@@ -513,14 +510,6 @@ impl<Msg> canvas::Program<Msg> for Page {
         _bounds: iced::Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Option<iced::widget::Action<Msg>> {
-        // if self.ctx.window_scale_factor != state.cached_scale_factor {
-        //     state.cached_scale_factor = self.ctx.window_scale_factor;
-        //     // refresh_glyphs(state, &self.glyphs, &self.ctx);
-        // }
-
-        // if self.glyphs.len() != state.cached_glyph_count {
-        //     // refresh_glyphs(state, &self.glyphs, &self.ctx);
-        // }
 
         match event {
             iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta }) => match delta {
