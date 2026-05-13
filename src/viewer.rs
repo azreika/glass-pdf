@@ -148,8 +148,8 @@ impl ApplicationHandler for App {
                     .unwrap();
                 let mut buf = surface.buffer_mut().unwrap();
                 let glyphs =
-                    rasterize_glyph_pixels(&self.glyphs, self.ctx.window_scale_factor, &self.ctx);
-                let pixmap = draw_to_pixmap(&self.shapes, self.width, self.height, &glyphs);
+                    rasterize_glyph_pixels(&self.glyphs, self.scale_factor as f64, &self.ctx);
+                let pixmap = draw_to_pixmap(&self.shapes, self.width, self.height, &glyphs, self.scale_factor as f64);
                 for (i, pixel) in buf.iter_mut().enumerate() {
                     let base = i * 4;
                     let r = pixmap.data()[base] as u32;
@@ -178,9 +178,12 @@ fn draw_to_pixmap(
     width: u32,
     height: u32,
     rasterized: &Vec<RasterGlyphPix>,
+    scale_factor: f64,
 ) -> tiny_skia::Pixmap {
     let mut pixmap = tiny_skia::Pixmap::new(width, height).unwrap();
     pixmap.fill(tiny_skia::Color::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
+    let transform = tiny_skia::Transform::identity();
+    // let transform = transform.post_scale(scale_factor as f32, scale_factor as f32);
 
     for info in shapes {
         let mut pb = tiny_skia::PathBuilder::new();
@@ -205,12 +208,12 @@ fn draw_to_pixmap(
                 ClippingRule::NonWinding => tiny_skia::FillRule::Winding,
                 ClippingRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
             };
-            pixmap.fill_path(&path, &paint, rule, tiny_skia::Transform::identity(), None);
+            pixmap.fill_path(&path, &paint, rule, transform, None);
         }
     }
 
     for glyph in rasterized {
-        let mut glyph_pixmap = tiny_skia::Pixmap::new(glyph.w, glyph.h).unwrap();
+        let mut glyph_pixmap = tiny_skia::Pixmap::new(glyph.w as u32, glyph.h as u32).unwrap();
         for (dst, src) in glyph_pixmap
             .pixels_mut()
             .iter_mut()
@@ -226,12 +229,13 @@ fn draw_to_pixmap(
             )
             .unwrap();
         }
+
         pixmap.draw_pixmap(
             glyph.x as i32,
             glyph.y as i32,
             glyph_pixmap.as_ref(),
             &tiny_skia::PixmapPaint::default(),
-            tiny_skia::Transform::identity(),
+            transform,
             None,
         );
     }
@@ -294,19 +298,12 @@ struct RasterizedGlyph {
 
 struct PageState {
     zoom_scale: f64,
-
-    cached_scale_factor: f64,
-    cached_glyph_count: usize,
-    rasterized: Vec<RasterizedGlyph>,
 }
 
 impl Default for PageState {
     fn default() -> Self {
         return PageState {
             zoom_scale: 1.0,
-            cached_scale_factor: 0.0,
-            cached_glyph_count: 0,
-            rasterized: vec![],
         };
     }
 }
@@ -371,8 +368,8 @@ struct RasterGlyphPix {
     rgba: Vec<u8>,
     x: f64,
     y: f64,
-    w: u32, // pixel dimensions, not PDF units
-    h: u32,
+    w: f64,
+    h: f64,
 }
 
 fn rasterize_glyph_pixels(
@@ -380,44 +377,6 @@ fn rasterize_glyph_pixels(
     scale_factor: f64,
     ctx: &PageCtx,
 ) -> Vec<RasterGlyphPix> {
-    let mut vv = vec![];
-    for info in glyphs.iter() {
-        let font = ctx.font_lib.get_font(&info.font_id);
-        let glyph_id = font.ttf.lookup_glyph_index(info.byte as char);
-        if glyph_id == 0 {
-            continue;
-        }
-
-        let (metrics, bitmap) = font
-            .ttf
-            .rasterize_indexed(glyph_id, (info.size * scale_factor) as f32);
-        if metrics.width == 0 || metrics.height == 0 {
-            continue;
-        }
-
-        let rgba = colourize_bitmap(&bitmap, &info.colour);
-
-        let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
-        let x = info.x + gap;
-        let mut y = ctx.height - info.y;
-        y -= (metrics.height as i32 + metrics.ymin) as f64 / scale_factor;
-
-        vv.push(RasterGlyphPix {
-            rgba,
-            x,
-            y,
-            w: metrics.width as u32,
-            h: metrics.height as u32,
-        });
-    }
-    return vv;
-}
-
-fn rasterize_glyphs(
-    glyphs: &Vec<GlyphInfo>,
-    scale_factor: f64,
-    ctx: &PageCtx,
-) -> Vec<RasterizedGlyph> {
     let mut vv = vec![];
     for info in glyphs.iter() {
         let font = ctx.font_lib.get_font(&info.font_id);
@@ -435,11 +394,6 @@ fn rasterize_glyphs(
         }
 
         let rgba = colourize_bitmap(&bitmap, &info.colour);
-        let handle = iced::widget::image::Handle::from_rgba(
-            metrics.width as u32,
-            metrics.height as u32,
-            rgba,
-        );
 
         let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
         let x = info.x + gap;
@@ -447,9 +401,13 @@ fn rasterize_glyphs(
         let mut y = ctx.height - info.y;
         y -= (metrics.height as i32 + metrics.ymin) as f64 / scale_factor;
 
-        let w = metrics.width as f64;
-        let h = metrics.height as f64;
-        vv.push(RasterizedGlyph { handle, x, y, w, h });
+        vv.push(RasterGlyphPix {
+            rgba,
+            x,
+            y,
+            w: metrics.width as f64,
+            h: metrics.height as f64,
+        });
     }
     return vv;
 }
@@ -473,12 +431,6 @@ fn to_iced_path(state: &PageState, info: &PathInfo) -> Path {
             }
         }
     });
-}
-
-fn refresh_glyphs(state: &mut PageState, glyphs: &Vec<GlyphInfo>, ctx: &PageCtx) {
-    let rglyphs = rasterize_glyphs(glyphs, state.cached_scale_factor, ctx);
-    state.cached_glyph_count = glyphs.len();
-    state.rasterized = rglyphs;
 }
 
 fn mk_colour(colour: &Option<Vec<f64>>) -> Color {
@@ -520,17 +472,17 @@ impl<Msg> canvas::Program<Msg> for Page {
 
         let scale_factor = self.ctx.window_scale_factor;
         let mut frame = Frame::new(renderer, bounds.size());
-        for info in state.rasterized.iter() {
-            frame.draw_image(
-                iced::Rectangle {
-                    x: state.scale(info.x + self.padding_x),
-                    y: state.scale(info.y + self.padding_y),
-                    width: state.scale(info.w / scale_factor),
-                    height: state.scale(info.h / scale_factor),
-                },
-                &info.handle,
-            );
-        }
+        // for info in state.rasterized.iter() {
+        //     frame.draw_image(
+        //         iced::Rectangle {
+        //             x: state.scale(info.x),
+        //             y: state.scale(info.y),
+        //             width: state.scale(info.w / scale_factor),
+        //             height: state.scale(info.h / scale_factor),
+        //         },
+        //         &info.handle,
+        //     );
+        // }
 
         for info in self.shapes.iter() {
             let iced_path = to_iced_path(state, info);
@@ -561,14 +513,14 @@ impl<Msg> canvas::Program<Msg> for Page {
         _bounds: iced::Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Option<iced::widget::Action<Msg>> {
-        if self.ctx.window_scale_factor != state.cached_scale_factor {
-            state.cached_scale_factor = self.ctx.window_scale_factor;
-            refresh_glyphs(state, &self.glyphs, &self.ctx);
-        }
+        // if self.ctx.window_scale_factor != state.cached_scale_factor {
+        //     state.cached_scale_factor = self.ctx.window_scale_factor;
+        //     // refresh_glyphs(state, &self.glyphs, &self.ctx);
+        // }
 
-        if self.glyphs.len() != state.cached_glyph_count {
-            refresh_glyphs(state, &self.glyphs, &self.ctx);
-        }
+        // if self.glyphs.len() != state.cached_glyph_count {
+        //     // refresh_glyphs(state, &self.glyphs, &self.ctx);
+        // }
 
         match event {
             iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta }) => match delta {
