@@ -4,7 +4,6 @@ use crate::content::streamer::{ClippingRule, PathPiece};
 pub enum Message {
     DrawBlock(Vec<Message>),
     DrawGlyph(GlyphInfo),
-    SetScaleFactor(f32),
     DrawPath(PathInfo),
     Clip(PathInfo),
     Noop,

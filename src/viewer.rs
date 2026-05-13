@@ -45,27 +45,15 @@ pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
     event_loop.run_app(&mut App::new(page_ctx, tokens)).unwrap();
 }
 
-fn collect_messages(msg: Message, shapes: &mut Vec<PathInfo>, glyphs: &mut Vec<GlyphInfo>) {
-    match msg {
-        Message::DrawBlock(inner) => {
-            for m in inner {
-                collect_messages(m, shapes, glyphs);
-            }
-        }
-        Message::DrawPath(info) => shapes.push(info),
-        Message::DrawGlyph(info) => glyphs.push(info),
-        _ => {}
-    }
-}
-
 struct App {
     window: Option<Arc<Window>>,
-    surface: Option<Surface<Arc<Window>, Arc<Window>>>, // no lifetime param
+    surface: Option<Surface<Arc<Window>, Arc<Window>>>,
     ctx: PageCtx,
     shapes: Vec<PathInfo>,
     glyphs: Vec<GlyphInfo>,
     width: u32,
     height: u32,
+    scale_factor: f32,
 }
 
 impl App {
@@ -75,9 +63,16 @@ impl App {
 
         let mut shapes = vec![];
         let mut glyphs = vec![];
+        let mut clips = vec![];
 
-        for msg in messages {
-            collect_messages(msg, &mut shapes, &mut glyphs);
+        for msg in messages.into_iter() {
+            match msg {
+                Message::DrawGlyph(info) => glyphs.push(info),
+                Message::DrawPath(info) => shapes.push(info),
+                Message::Clip(info) => clips.push(info),
+                Message::DrawBlock(_) => panic!("unexpected draw block in messages"),
+                Message::Noop => panic!("unexpected noop in messages"),
+            }
         }
 
         App {
@@ -88,6 +83,7 @@ impl App {
             glyphs,
             width: ctx.width as u32,
             height: ctx.height as u32,
+            scale_factor: 1.0,
         }
     }
 }
@@ -100,7 +96,22 @@ fn all_messages(mut p: ContentStreamer) -> Vec<Message> {
             messages.push(msg);
         }
     }
-    return messages;
+    return flatten_messages(messages);
+}
+
+fn flatten_messages(msgs: Vec<Message>) -> Vec<Message> {
+    let mut result = vec![];
+    for msg in msgs.into_iter() {
+        match msg {
+            Message::DrawBlock(inner) => {
+                let mut vv = flatten_messages(inner);
+                result.append(&mut vv);
+            },
+            Message::Noop => panic!("unexpected noop while flattening"),
+            _ => result.push(msg),
+        }
+    }
+    return result;
 }
 
 impl ApplicationHandler for App {
@@ -115,6 +126,7 @@ impl ApplicationHandler for App {
         let size = window.inner_size();
         self.width = size.width;
         self.height = size.height;
+        self.scale_factor = window.scale_factor() as f32;
         self.window = Some(window);
         self.surface = Some(surface);
     }
@@ -240,34 +252,6 @@ fn to_skia_colour(colour: &Option<Vec<f64>>) -> tiny_skia::Color {
     }
 }
 
-pub fn view_contents2(page_ctx: &PageCtx, tokens: &Vec<Token>) {
-    let ctx = page_ctx.clone();
-    let toks = tokens.clone();
-
-    let app = iced::application(
-        move || {
-            let streamer = ContentStreamer::new(ctx.clone(), toks.clone());
-            let stream = stream_content(streamer);
-            let task = Task::stream(stream);
-            let scale_task = iced::window::oldest()
-                .then(|id| iced::window::scale_factor(id.unwrap()))
-                .map(Message::SetScaleFactor);
-            (
-                Viewer {
-                    ctx: ctx.clone(),
-                    glyphs: vec![],
-                    shapes: vec![],
-                    clips: vec![],
-                },
-                Task::batch([task, scale_task]),
-            )
-        },
-        Viewer::update,
-        Viewer::view,
-    );
-    app.run().unwrap();
-}
-
 struct Viewer {
     ctx: PageCtx,
     glyphs: Vec<GlyphInfo>,
@@ -276,29 +260,6 @@ struct Viewer {
 }
 
 impl Viewer {
-    fn update(&mut self, message: Message) {
-        match message {
-            Message::DrawBlock(messages) => {
-                for message in messages.iter() {
-                    self.update(message.clone());
-                }
-            }
-            Message::DrawGlyph(info) => {
-                self.glyphs.push(info);
-            }
-            Message::SetScaleFactor(x) => {
-                self.ctx.window_scale_factor = x as f64;
-            }
-            Message::DrawPath(info) => {
-                self.shapes.push(info);
-            }
-            Message::Noop => panic!("Noops should have been filtered out"),
-            Message::Clip(info) => {
-                self.clips.push(info);
-            }
-        }
-    }
-
     fn view(&self) -> Element<'_, Message> {
         return Canvas::new(Page {
             padding_x: 0.0,
@@ -404,15 +365,6 @@ fn colourize_bitmap(bitmap: &Vec<u8>, colour: &Option<Vec<f64>>) -> Vec<u8> {
             return [0, 0, 0].to_vec();
         }
     };
-}
-
-impl Page {
-    fn mk_viewer_background(&self, renderer: &Renderer, bounds: iced::Rectangle) -> Geometry {
-        let mut f1 = Frame::new(renderer, bounds.size());
-        let outer_rect = canvas::Path::rectangle(Point { x: 0.0, y: 0.0 }, bounds.size());
-        f1.fill(&outer_rect, Color::from_rgb(0.8, 0.8, 0.8));
-        return f1.into_geometry();
-    }
 }
 
 struct RasterGlyphPix {
@@ -565,7 +517,6 @@ impl<Msg> canvas::Program<Msg> for Page {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
         let mut geom: Vec<Geometry> = vec![];
-        geom.push(self.mk_viewer_background(renderer, bounds));
 
         let scale_factor = self.ctx.window_scale_factor;
         let mut frame = Frame::new(renderer, bounds.size());
