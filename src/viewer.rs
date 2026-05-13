@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use softbuffer::{Context, Surface};
-use tiny_skia::Pixmap;
+use tiny_skia::{Path, Pixmap};
 use winit::application::ApplicationHandler;
 use winit::event::{MouseScrollDelta, WindowEvent};
 use winit::window::Window;
@@ -106,6 +106,23 @@ impl App {
         );
     }
 
+    fn to_skia_path(&self, info: &PathInfo) -> Option<Path> {
+        let mut pb = tiny_skia::PathBuilder::new();
+        for piece in &info.path {
+            match piece {
+                PathPiece::MoveTo { x, y } => pb.move_to(*x as f32, *y as f32),
+                PathPiece::LineTo { x, y } => pb.line_to(*x as f32, *y as f32),
+                PathPiece::Close => pb.close(),
+                PathPiece::Rect { x, y, w, h } => {
+                    pb.push_rect(
+                        tiny_skia::Rect::from_xywh(*x as f32, *y as f32, *w as f32, *h as f32).unwrap()
+                    );
+                }
+            }
+        }
+        return pb.finish();
+    }
+
     fn build_base_pixmap(&mut self) -> Pixmap {
         let sf = self.cached_scale_factor as f64;
         // Pixmap in physical pixels at zoom=1
@@ -117,20 +134,7 @@ impl App {
         let transform = tiny_skia::Transform::from_scale(sf as f32, sf as f32);
 
         for info in &self.shapes {
-            let mut pb = tiny_skia::PathBuilder::new();
-            for piece in &info.path {
-                match piece {
-                    PathPiece::MoveTo { x, y } => pb.move_to(*x as f32, *y as f32),
-                    PathPiece::LineTo { x, y } => pb.line_to(*x as f32, *y as f32),
-                    PathPiece::Close => pb.close(),
-                    PathPiece::Rect { x, y, w, h } => {
-                        pb.push_rect(
-                            tiny_skia::Rect::from_xywh(*x as f32, *y as f32, *w as f32, *h as f32).unwrap()
-                        );
-                    }
-                }
-            }
-            if let Some(path) = pb.finish() {
+            if let Some(path) = self.to_skia_path(&info) {
                 let col = to_skia_colour(&info.colour);
                 let mut paint = tiny_skia::Paint::default();
                 paint.set_color(col);
@@ -232,6 +236,7 @@ impl ApplicationHandler for App {
                 if size.width > 0 && size.height > 0 {
                     self.width = size.width;
                     self.height = size.height;
+                    self.out_pixmap = Some(tiny_skia::Pixmap::new(self.width, self.height).unwrap());
                     self.window.as_ref().unwrap().request_redraw();
                 }
             },
