@@ -7,6 +7,7 @@ use iced::widget::canvas::{self, Canvas, Fill, Frame, Geometry, Path};
 use iced::{Color, Element, Task};
 use iced::{Length, Point, Renderer, Theme};
 use softbuffer::{Context, Surface};
+use tiny_skia::Pixmap;
 use winit::application::ApplicationHandler;
 use winit::event::{MouseScrollDelta, WindowEvent};
 use winit::window::Window;
@@ -57,6 +58,9 @@ struct App {
     zoom_scale: f64,
     cached_scale_factor: f32,
     rasterized_glyphs: Vec<RasterGlyphPix>,
+
+    base_pixmap: Option<tiny_skia::Pixmap>,
+    out_pixmap: Option<tiny_skia::Pixmap>,
 }
 
 impl App {
@@ -88,40 +92,47 @@ impl App {
             height: ctx.height as u32,
             zoom_scale: 1.0,
 
+            out_pixmap: None,
+            base_pixmap: None,
             cached_scale_factor: 0.0,
             rasterized_glyphs: vec![],
         }
     }
 
-    fn scale(&self, x: f64) -> f32 {
-        return x as f32 * self.zoom_scale as f32;
+    fn draw_to_pixmap(&mut self) {
+        let output = self.out_pixmap.as_mut().unwrap();
+        let base = self.base_pixmap.as_ref().unwrap();
+
+        output.fill(tiny_skia::Color::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
+        output.draw_pixmap(
+            0, 0,
+            base.as_ref(),
+            &tiny_skia::PixmapPaint::default(),
+            tiny_skia::Transform::from_scale(self.zoom_scale as f32, self.zoom_scale as f32),
+            None,
+        );
     }
 
+    fn build_base_pixmap(&mut self) -> Pixmap {
+        let sf = self.cached_scale_factor as f64;
+        // Pixmap in physical pixels at zoom=1
+        let phys_w = (self.ctx.width * sf) as u32;
+        let phys_h = (self.ctx.height * sf) as u32;
+        let mut pixmap = tiny_skia::Pixmap::new(phys_w, phys_h).unwrap();
 
-    fn draw_to_pixmap(
-        &self,
-        shapes: &[PathInfo],
-        width: u32,
-        height: u32,
-        rasterized: &Vec<RasterGlyphPix>,
-        scale_factor: f64,
-    ) -> tiny_skia::Pixmap {
-        let mut pixmap = tiny_skia::Pixmap::new(width, height).unwrap();
         pixmap.fill(tiny_skia::Color::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
-        let transform = tiny_skia::Transform::identity();
-        let transform = transform.post_scale(scale_factor as f32, scale_factor as f32);
+        let transform = tiny_skia::Transform::from_scale(sf as f32, sf as f32);
 
-        for info in shapes {
+        for info in &self.shapes {
             let mut pb = tiny_skia::PathBuilder::new();
             for piece in &info.path {
                 match piece {
-                    PathPiece::MoveTo { x, y } => pb.move_to(self.scale(*x), self.scale(*y)),
-                    PathPiece::LineTo { x, y } => pb.line_to(self.scale(*x), self.scale(*y)),
+                    PathPiece::MoveTo { x, y } => pb.move_to(*x as f32, *y as f32),
+                    PathPiece::LineTo { x, y } => pb.line_to(*x as f32, *y as f32),
                     PathPiece::Close => pb.close(),
                     PathPiece::Rect { x, y, w, h } => {
                         pb.push_rect(
-                            tiny_skia::Rect::from_xywh(self.scale(*x), self.scale(*y), self.scale(*w), self.scale(*h))
-                                .unwrap(),
+                            tiny_skia::Rect::from_xywh(*x as f32, *y as f32, *w as f32, *h as f32).unwrap()
                         );
                     }
                 }
@@ -138,7 +149,7 @@ impl App {
             }
         }
 
-        for glyph in rasterized {
+        for glyph in &self.rasterized_glyphs {
             let mut glyph_pixmap = tiny_skia::Pixmap::new(glyph.w as u32, glyph.h as u32).unwrap();
             for (dst, src) in glyph_pixmap
                 .pixels_mut()
@@ -161,10 +172,11 @@ impl App {
                 glyph.y as i32,
                 glyph_pixmap.as_ref(),
                 &tiny_skia::PixmapPaint::default(),
-                tiny_skia::Transform::identity().post_scale(self.zoom_scale as f32, self.zoom_scale as f32),
+                tiny_skia::Transform::identity(),
                 None,
             );
         }
+
         return pixmap;
     }
 }
@@ -212,11 +224,14 @@ impl ApplicationHandler for App {
         let rasterized_glyphs =
                 rasterize_glyph_pixels(&self.glyphs, scale_factor as f64, &self.ctx);
 
+        self.cached_scale_factor = scale_factor;
+
         self.window = Some(window);
         self.surface = Some(surface);
 
         self.rasterized_glyphs = rasterized_glyphs;
-        self.cached_scale_factor = scale_factor;
+        self.base_pixmap = Some(self.build_base_pixmap());
+        self.out_pixmap = Some(tiny_skia::Pixmap::new(self.width, self.height).unwrap());
     }
 
     fn window_event(
@@ -228,8 +243,10 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::RedrawRequested => {
                 assert_eq!(self.window.as_ref().unwrap().scale_factor(), self.cached_scale_factor as f64);
-                let pixmap = self.draw_to_pixmap(&self.shapes, self.width, self.height, &self.rasterized_glyphs, self.cached_scale_factor as f64);
+                self.draw_to_pixmap();
+                let pixmap = self.out_pixmap.as_ref().unwrap();
                 let surface = self.surface.as_mut().unwrap();
+
                 surface
                     .resize(
                         NonZeroU32::new(self.width).unwrap(),
@@ -237,7 +254,6 @@ impl ApplicationHandler for App {
                     )
                     .unwrap();
                 let mut buf = surface.buffer_mut().unwrap();
-
                 for (i, pixel) in buf.iter_mut().enumerate() {
                     let base = i * 4;
                     let r = pixmap.data()[base] as u32;
@@ -292,22 +308,6 @@ struct Viewer {
     glyphs: Vec<GlyphInfo>,
     shapes: Vec<PathInfo>,
     clips: Vec<PathInfo>,
-}
-
-impl Viewer {
-    fn view(&self) -> Element<'_, Message> {
-        return Canvas::new(Page {
-            padding_x: 0.0,
-            padding_y: 0.0,
-            glyphs: self.glyphs.clone(),
-            shapes: self.shapes.clone(),
-            ctx: self.ctx.clone(),
-            clips: self.clips.clone(),
-        })
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into();
-    }
 }
 
 struct Page {
@@ -442,28 +442,6 @@ fn rasterize_glyph_pixels(
     }
     return vv;
 }
-
-fn to_iced_path(state: &PageState, info: &PathInfo) -> Path {
-    return iced::widget::canvas::Path::new(|builder| {
-        for piece in &info.path {
-            match *piece {
-                PathPiece::MoveTo { x, y } => {
-                    builder.move_to(state.scaled_pt(x, y));
-                }
-                PathPiece::LineTo { x, y } => {
-                    builder.line_to(state.scaled_pt(x, y));
-                }
-                PathPiece::Close => {
-                    builder.close();
-                }
-                PathPiece::Rect { x, y, w, h } => {
-                    builder.rectangle(state.scaled_pt(x, y), state.scaled_size(w, h));
-                }
-            }
-        }
-    });
-}
-
 fn mk_colour(colour: &Option<Vec<f64>>) -> Color {
     if colour.is_none() {
         return Color::BLACK;
@@ -486,45 +464,4 @@ fn mk_colour(colour: &Option<Vec<f64>>) -> Color {
     bb.g = g;
     bb.b = g;
     return bb;
-}
-
-impl<Msg> canvas::Program<Msg> for Page {
-    type State = PageState;
-
-    fn draw(
-        &self,
-        state: &PageState,
-        renderer: &Renderer,
-        _theme: &Theme,
-        bounds: iced::Rectangle,
-        _cursor: iced::mouse::Cursor,
-    ) -> Vec<Geometry> {
-        let mut geom: Vec<Geometry> = vec![];
-        return geom;
-    }
-
-    fn update(
-        &self,
-        state: &mut PageState,
-        event: &iced::Event,
-        _bounds: iced::Rectangle,
-        _cursor: iced::mouse::Cursor,
-    ) -> Option<iced::widget::Action<Msg>> {
-
-        match event {
-            iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta }) => match delta {
-                iced::mouse::ScrollDelta::Lines { y, .. }
-                | iced::mouse::ScrollDelta::Pixels { y, .. } => {
-                    if *y == 0.0 {
-                        return None;
-                    }
-                    state.zoom_scale *= 1.0 + *y as f64 * 0.02;
-                    state.zoom_scale = state.zoom_scale.clamp(0.1, 10.0);
-                    return Some(Action::request_redraw());
-                }
-            },
-            _ => {}
-        }
-        return None;
-    }
 }
