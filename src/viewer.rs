@@ -265,7 +265,6 @@ impl ApplicationHandler for App {
                 if size.width > 0 && size.height > 0 {
                     self.width = size.width;
                     self.height = size.height;
-                    self.out_pixmap = Some(tiny_skia::Pixmap::new(self.width, self.height).unwrap());
                     self.window.as_ref().unwrap().request_redraw();
                 }
             },
