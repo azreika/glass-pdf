@@ -60,8 +60,7 @@ fn read_args() -> RunConfig {
             },
         }
     }
-    assert!(!filename.is_none());
-    let filename = filename.unwrap();
+    let filename = filename.unwrap_or("examples/samplepdf.pdf".to_string());
 
     let run_type = if is_content {
         RunType::ContentStream
