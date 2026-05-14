@@ -5,7 +5,7 @@ use crate::content::tokenizer::Token;
 use crate::fonts::Font;
 
 use crate::viewer::PageCtx;
-use crate::viewer_message::{Color, GlyphInfo, Message, PathInfo};
+use crate::viewer_message::{Color, GlyphInfo, Message};
 use crate::transform::{Matrix, multiply_3d};
 
 struct TextState {
@@ -153,27 +153,23 @@ impl ContentStreamer {
     }
 
     pub fn advance(&mut self) -> Message {
-        match self.next_token() {
-            v if is_value(&v) => {
-                self.stack.push(parse_value(v));
-                return Message::Noop;
+        let tok = self.next_token();
+
+        // Messages
+        match tok {
+            // Paths
+            Token::Fill => {
+                return Message::DrawPath(
+                    self.graphics.finish_path(ClippingRule::Winding),
+                );
             },
-            Token::Tm => {
-                let mut mat = vec![];
-                for _ in 0..6 {
-                    mat.push(self.pop_number());
-                }
-                mat.reverse();
-                self.text_state.matrix = Matrix::vec6_to_matrix(&mat);
-                return Message::Noop;
+            Token::FillStar => {
+                return Message::DrawPath(
+                    self.graphics.finish_path(ClippingRule::EvenOdd),
+                );
             },
-            Token::Tf => {
-                let size = self.pop_number();
-                let font = self.pop_string();
-                self.text_state.font = Some(font);
-                self.text_state.size = Some(size);
-                return Message::Noop;
-            },
+
+            // Text
             Token::Tj => {
                 // show one
                 let str = self.pop_string_u8();
@@ -198,28 +194,43 @@ impl ContentStreamer {
                 }
                 return self.mk_message_block(msgs);
             },
+            _ => {},
+        }
+
+        // Internal only
+        match tok {
+            v if is_value(&v) => {
+                self.stack.push(parse_value(v));
+            },
+            Token::Tm => {
+                let mut mat = vec![];
+                for _ in 0..6 {
+                    mat.push(self.pop_number());
+                }
+                mat.reverse();
+                self.text_state.matrix = Matrix::vec6_to_matrix(&mat);
+            },
+            Token::Tf => {
+                let size = self.pop_number();
+                let font = self.pop_string();
+                self.text_state.font = Some(font);
+                self.text_state.size = Some(size);
+            },
             Token::GS => {
                 let _cs = self.pop_string();
                 println!("TODO: implement gs keyword");
-                return Message::Noop;
             },
 
-            Token::BT => {
-                self.scopes.push(Scope::Text);
-                return Message::Noop;
-            },
+            Token::BT => self.scopes.push(Scope::Text),
             Token::ET => {
                 self.reset_text_state();
                 assert!(matches!(self.pop_scope(), Scope::Text));
-                return Message::Noop;
             },
             Token::SaveGraphicsState => {
                 self.graphics_stack.push(self.graphics.clone());
-                return Message::Noop;
             },
             Token::RestoreGraphicsState => {
                 self.graphics = self.graphics_stack.pop().unwrap();
-                return Message::Noop;
             },
             Token::Rect => {
                 let h = self.pop_number();
@@ -229,25 +240,15 @@ impl ContentStreamer {
 
                 let rect = PathOp::Rect { x, y, w, h };
                 self.graphics.draw(rect);
-                return Message::Noop;
             },
-            Token::W => {
-                self.graphics.clip_path(ClippingRule::Winding);
-                return Message::Noop;
-            },
-            Token::WStar => {
-                self.graphics.clip_path(ClippingRule::EvenOdd);
-                return Message::Noop;
-            },
-            Token::N => {
-                // Clipping Path Operator - end path object without filling it
-                self.graphics.clear_path();
-                return Message::Noop;
-            },
+
+            Token::W => self.graphics.clip_path(ClippingRule::Winding),
+            Token::WStar => self.graphics.clip_path(ClippingRule::EvenOdd),
+            Token::N => self.graphics.clear_path(),
+
             Token::CsNoStroke => {
                 let cs = self.pop_string();
-                self.set_cs_nostroke(cs);
-                return Message::Noop;
+                self.graphics.cs_nostroke = Some(cs);
             },
             Token::SetColourNoStroke => {
                 let num_components = self.num_colour_components();
@@ -257,12 +258,10 @@ impl ContentStreamer {
                 }
                 vv.reverse();
                 self.graphics.set_color_fill(to_color(vv));
-                return Message::Noop;
             },
             Token::I => {
                 println!("TODO: implement colour space operator flatness I");
                 let _flatness = self.pop_number();
-                return Message::Noop;
             },
             Token::CmStroke => {
                 let mut mat = vec![];
@@ -272,20 +271,17 @@ impl ContentStreamer {
                 mat.reverse();
                 let mat = Matrix::vec6_to_matrix(&mat);
                 self.graphics.ctm = multiply_3d(self.curr_ctm(), &mat);
-                return Message::Noop;
             },
             Token::M => {
                 // Move To point
                 let y = self.pop_number();
                 let x = self.pop_number();
                 self.graphics.move_to(x, y);
-                return Message::Noop;
             },
             Token::L => {
                 let y = self.pop_number();
                 let x = self.pop_number();
                 self.graphics.line_to(x, y);
-                return Message::Noop;
             },
             Token::V | Token::Y => {
                 let _x1 = self.pop_number();
@@ -293,94 +289,70 @@ impl ContentStreamer {
                 let _x3 = self.pop_number();
                 let _x4 = self.pop_number();
                 println!("TODO: implement V and Y keyword");
-                return Message::Noop;
             },
             Token::H => {
                 self.graphics.close_path();
-                return Message::Noop;
             },
             Token::BDC => {
                 let dict = self.pop_dict();
                 let tag = self.pop_string();
                 self.scopes.push(Scope::MarkedContent { tag, dict: Some(dict) });
-                return Message::Noop;
             },
             Token::BMC => {
                 let tag = self.pop_string();
                 self.scopes.push(Scope::MarkedContent { tag, dict: None });
-                return Message::Noop;
             },
             Token::EMC => {
                 assert!(matches!(self.pop_scope(), Scope::MarkedContent { .. }));
-                return Message::Noop;
-            },
-            Token::Fill => {
-                return Message::DrawPath(
-                    self.graphics.finish_path(ClippingRule::Winding),
-                );
-            },
-            Token::FillStar => {
-                return Message::DrawPath(
-                    self.graphics.finish_path(ClippingRule::EvenOdd),
-                );
             },
             Token::GNonStroke => {
                 // Sets in device gray so 0->1, 1 is white
                 let val = self.pop_number() as f32;
                 self.graphics.set_color_fill(Color::Gray(val));
-                return Message::Noop;
             },
             Token::GStroke => {
                 // Sets in device gray so 0->1, 1 is white
                 let _val = self.pop_number();
                 println!("implement g stroke!");
-                return Message::Noop;
             },
             Token::RGNonStroke => {
                 let b = self.pop_number() as f32;
                 let g = self.pop_number() as f32;
                 let r = self.pop_number() as f32;
                 self.graphics.set_color_fill(Color::RGB(r, g, b));
-                return Message::Noop;
             },
             Token::RGStroke => {
                 let _n1 = self.pop_number();
                 let _n2 = self.pop_number();
                 let _n3 = self.pop_number();
                 println!("implement rg non stroke");
-                return Message::Noop;
             },
             Token::WLineWidth => {
                 let _width = self.pop_number();
                 println!("implement line width");
-                return Message::Noop;
             },
             Token::LineCap => {
                 let _cap = self.pop_number();
                 println!("implement line cap");
-                return Message::Noop;
             },
             Token::LineJoin => {
                 let _join = self.pop_number();
                 println!("implement line join");
-                return Message::Noop;
             },
             Token::Stroke => {
                 println!("implement stroke");
-                return Message::Noop;
             },
             Token::CharSpacing => {
                 let _spacing = self.pop_number();
                 println!("implement char spacing");
-                return Message::Noop;
             },
             Token::Do => {
                 let name = self.pop_string();
                 println!("implemnet do operator ({:?})", name);
-                return Message::Noop;
             }
             other => panic!("unexpected token: {:?}", other),
-        }
+        };
+        return Message::Noop;
     }
 
     fn curr_ctm(&self) -> &Matrix {
@@ -440,8 +412,8 @@ impl ContentStreamer {
 
     fn get_font(&self) -> &Font {
         return match self.text_state.font {
-            None => panic!(),
             Some(ref other) => self.ctx.font_lib.get_font(&other),
+            None => panic!(),
         }
     }
 
@@ -479,10 +451,6 @@ impl ContentStreamer {
 
     fn set_x(&mut self, x: f64) {
         self.text_state.matrix.set_x(x);
-    }
-
-    fn set_cs_nostroke(&mut self, cs_id: String) {
-        self.graphics.cs_nostroke = Some(cs_id);
     }
 
     fn move_x(&mut self, x: f64) {
