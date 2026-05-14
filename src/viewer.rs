@@ -137,6 +137,9 @@ impl App {
 
     fn mk_mask(&self, clips: &Vec<(ClippingRule,Vec<PathPiece>)>) -> Mask {
         let sf = self.cached_scale_factor as f64;
+        let mut base_map = Pixmap::new(self.phys_w(), self.phys_h()).unwrap();
+        base_map.fill(Color::WHITE);
+
         let mut mask = Mask::new(self.phys_w(), self.phys_h()).unwrap();
         let transform = tiny_skia::Transform::from_scale(sf as f32, sf as f32);
 
@@ -147,11 +150,12 @@ impl App {
             };
 
             let mask_path = self.to_skia_path(&clip).unwrap();
-            let mut paint = tiny_skia::Paint::default();
-            paint.set_color(Color::BLACK);
+            mask.clear();
             mask.fill_path(&mask_path, skia_rule, true, transform);
+            base_map.apply_mask(&mask);
         }
-        return mask;
+
+        return Mask::from_pixmap(base_map.as_ref(), tiny_skia::MaskType::Alpha);
     }
 
     fn build_base_pixmap(&mut self) -> Pixmap {

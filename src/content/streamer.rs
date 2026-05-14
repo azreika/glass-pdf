@@ -253,7 +253,6 @@ impl ContentStreamer {
                 assert!(matches!(self.pop_scope(), Scope::Text));
                 return Message::Noop;
             },
-
             Token::SaveGraphicsState => {
                 self.graphics_state_stack.push(self.graphics_state.clone());
                 return Message::Noop;
