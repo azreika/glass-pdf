@@ -45,7 +45,6 @@ struct App {
     surface: Option<Surface<Arc<Window>, Arc<Window>>>,
     ctx: PageCtx,
     shapes: Vec<PathInfo>,
-    clips: Vec<PathInfo>,
     glyphs: Vec<GlyphInfo>,
     width: u32,
     height: u32,
@@ -64,13 +63,11 @@ impl App {
 
         let mut shapes = vec![];
         let mut glyphs = vec![];
-        let mut clips = vec![];
 
         for msg in messages.into_iter() {
             match msg {
                 Message::DrawGlyph(info) => glyphs.push(info),
                 Message::DrawPath(info) => shapes.push(info),
-                Message::Clip(info) => clips.push(info),
                 Message::DrawBlock(_) => panic!("unexpected draw block in messages"),
                 Message::Noop => panic!("unexpected noop in messages"),
             }
@@ -82,7 +79,6 @@ impl App {
             ctx: ctx.clone(),
             shapes,
             glyphs,
-            clips,
             width: ctx.width as u32,
             height: ctx.height as u32,
             zoom_scale: 1.0,

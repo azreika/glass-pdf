@@ -5,7 +5,6 @@ pub enum Message {
     DrawBlock(Vec<Message>),
     DrawGlyph(GlyphInfo),
     DrawPath(PathInfo),
-    Clip(PathInfo),
     Noop,
 }
 
