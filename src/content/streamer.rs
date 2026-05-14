@@ -30,7 +30,7 @@ pub enum PathPiece {
     Close,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum ClippingRule {
     NonWinding,
     EvenOdd,
@@ -428,8 +428,8 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::Do => {
-                let _name = self.pop_string();
-                println!("implemnet do operator");
+                let name = self.pop_string();
+                println!("implemnet do operator ({:?})", name);
                 return Message::Noop;
             }
             other => panic!("unexpected token: {:?}", other),
