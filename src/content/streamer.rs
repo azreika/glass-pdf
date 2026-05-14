@@ -199,9 +199,8 @@ impl ContentStreamer {
 
         // Internal only
         match tok {
-            v if is_value(&v) => {
-                self.stack.push(parse_value(v));
-            },
+            v if is_value(&v) => self.stack.push(parse_value(v)),
+
             Token::Tm => {
                 let mut mat = vec![];
                 for _ in 0..6 {
