@@ -46,8 +46,6 @@ struct App {
     ctx: PageCtx,
     shapes: Vec<PathInfo>,
     glyphs: Vec<GlyphInfo>,
-    width: u32,
-    height: u32,
 
     zoom_scale: f64,
     cached_scale_factor: f32,
@@ -79,8 +77,6 @@ impl App {
             ctx: ctx.clone(),
             shapes,
             glyphs,
-            width: ctx.width as u32,
-            height: ctx.height as u32,
             zoom_scale: 1.0,
 
             out_pixmap: None,
@@ -223,6 +219,16 @@ impl App {
         self.draw_glyphs(&mut pixmap);
         return pixmap;
     }
+
+    fn redraw(&self) {
+        self.window.as_ref().unwrap().request_redraw();
+    }
+
+    fn window_size(&self) -> (u32, u32) {
+        let window = self.window.as_ref().unwrap();
+        let size = window.inner_size();
+        return (size.width, size.height);
+    }
 }
 
 impl ApplicationHandler for App {
@@ -235,8 +241,6 @@ impl ApplicationHandler for App {
         let context = Context::new(window.clone()).unwrap();
         let surface = Surface::new(&context, window.clone()).unwrap();
         let size = window.inner_size();
-        self.width = size.width;
-        self.height = size.height;
 
         let scale_factor = window.scale_factor() as f32;
         let rasterized_glyphs =
@@ -249,7 +253,8 @@ impl ApplicationHandler for App {
 
         self.rasterized_glyphs = rasterized_glyphs;
         self.base_pixmap = Some(self.mk_base_pixmap());
-        self.out_pixmap = Some(tiny_skia::Pixmap::new(self.width, self.height).unwrap());
+
+        self.out_pixmap = Some(tiny_skia::Pixmap::new(size.width, size.height).unwrap());
     }
 
     fn window_event(
@@ -262,15 +267,13 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 assert_eq!(self.window.as_ref().unwrap().scale_factor(), self.cached_scale_factor as f64);
                 self.draw_to_pixmap();
+                let (w, h) = self.window_size();
                 let pixmap = self.out_pixmap.as_ref().unwrap();
                 let surface = self.surface.as_mut().unwrap();
-
-                surface
-                    .resize(
-                        NonZeroU32::new(self.width).unwrap(),
-                        NonZeroU32::new(self.height).unwrap(),
-                    )
-                    .unwrap();
+                surface.resize(
+                        NonZeroU32::new(w).unwrap(),
+                        NonZeroU32::new(h).unwrap(),
+                    ).unwrap();
                 let mut buf = surface.buffer_mut().unwrap();
                 for (pixel, src) in buf.iter_mut().zip(pixmap.data().chunks_exact(4)) {
                     *pixel = ((src[0] as u32) << 16) | ((src[1] as u32) << 8) | src[2] as u32;
@@ -281,10 +284,8 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
                 if size.width > 0 && size.height > 0 {
-                    self.width = size.width;
-                    self.height = size.height;
-                    self.out_pixmap = Some(tiny_skia::Pixmap::new(self.width, self.height).unwrap());
-                    self.window.as_ref().unwrap().request_redraw();
+                    self.out_pixmap = Some(tiny_skia::Pixmap::new(size.width, size.height).unwrap());
+                    self.redraw();
                 }
             },
 
@@ -296,7 +297,7 @@ impl ApplicationHandler for App {
                 if y != 0.0 {
                     self.zoom_scale *= 1.0 + y * 0.02;
                     self.zoom_scale = self.zoom_scale.clamp(0.1, 10.0);
-                    self.window.as_ref().unwrap().request_redraw();
+                    self.redraw();
                 }
             },
             _ => {}
