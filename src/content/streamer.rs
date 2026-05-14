@@ -44,6 +44,7 @@ struct GraphicsState {
     colour_nostroke: Option<Vec<f64>>,
 
     path: Vec<PathPiece>,
+    clips: Vec<(ClippingRule, Vec<PathPiece>)>,
 }
 
 impl GraphicsState {
@@ -53,6 +54,7 @@ impl GraphicsState {
             cs_nostroke: None,
             colour_nostroke: None,
             path: vec![],
+            clips: vec![],
         };
     }
 
@@ -271,18 +273,14 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::W => {
-                return Message::Clip(PathInfo {
-                    path: self.graphics_state.path.clone(),
-                    colour: None,
-                    rule: ClippingRule::NonWinding,
-                });
+                let path = self.graphics_state.path.clone();
+                self.graphics_state.clips.push((ClippingRule::NonWinding, path));
+                return Message::Noop;
             },
             Token::WStar => {
-                return Message::Clip(PathInfo {
-                    path: self.graphics_state.path.clone(),
-                    colour: None,
-                    rule: ClippingRule::EvenOdd,
-                });
+                let path = self.graphics_state.path.clone();
+                self.graphics_state.clips.push((ClippingRule::EvenOdd, path));
+                return Message::Noop;
             },
             Token::N => {
                 // Clipping Path Operator - end path object without filling it
@@ -365,6 +363,7 @@ impl ContentStreamer {
                     path: self.graphics_state.path.clone(),
                     colour: self.graphics_state.colour_nostroke.clone(),
                     rule: ClippingRule::NonWinding,
+                    clips: self.graphics_state.clips.clone(),
                 });
                 self.graphics_state.path.clear();
                 return msg;
@@ -514,6 +513,7 @@ impl ContentStreamer {
                 font_id: self.get_font_id(),
                 width: cwidth,
                 colour: self.graphics_state.colour_nostroke.clone(),
+                clips: self.graphics_state.clips.clone(),
             }));
 
             self.set_x(self.text_x() + cwidth);

@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use softbuffer::{Context, Surface};
-use tiny_skia::{Path, Pixmap};
+use tiny_skia::{Color, FillRule, Mask, Path, Pixmap};
 use winit::application::ApplicationHandler;
 use winit::event::{MouseScrollDelta, WindowEvent};
 use winit::window::Window;
@@ -108,9 +108,9 @@ impl App {
         );
     }
 
-    fn to_skia_path(&self, info: &PathInfo) -> Option<Path> {
+    fn to_skia_path(&self, path: &Vec<PathPiece>) -> Option<Path> {
         let mut pb = tiny_skia::PathBuilder::new();
-        for piece in &info.path {
+        for piece in path {
             match piece {
                 PathPiece::MoveTo { x, y } => pb.move_to(*x as f32, *y as f32),
                 PathPiece::LineTo { x, y } => pb.line_to(*x as f32, *y as f32),
@@ -125,28 +125,61 @@ impl App {
         return pb.finish();
     }
 
+    fn phys_w(&self) -> u32 {
+        let sf = self.cached_scale_factor as f64;
+        return (self.ctx.width * sf) as u32;
+    }
+
+    fn phys_h(&self) -> u32 {
+        let sf = self.cached_scale_factor as f64;
+        return (self.ctx.height * sf) as u32;
+    }
+
+    fn mk_mask(&self, clips: &Vec<(ClippingRule,Vec<PathPiece>)>) -> Mask {
+        let sf = self.cached_scale_factor as f64;
+        let mut mask = Mask::new(self.phys_w(), self.phys_h()).unwrap();
+        let transform = tiny_skia::Transform::from_scale(sf as f32, sf as f32);
+
+        for (rule, clip) in clips {
+            let skia_rule = match rule {
+                ClippingRule::EvenOdd => FillRule::EvenOdd,
+                ClippingRule::NonWinding => FillRule::Winding,
+            };
+
+
+            let mask_path = self.to_skia_path(&clip).unwrap();
+            let mut paint = tiny_skia::Paint::default();
+            paint.set_color(Color::BLACK);
+            mask.fill_path(&mask_path, skia_rule, true, transform);
+        }
+        return mask;
+    }
+
     fn build_base_pixmap(&mut self) -> Pixmap {
         let sf = self.cached_scale_factor as f64;
         // Pixmap in physical pixels at zoom=1
-        let phys_w = (self.ctx.width * sf) as u32;
-        let phys_h = (self.ctx.height * sf) as u32;
+        let phys_w = self.phys_w();
+        let phys_h = self.phys_h();
         let mut pixmap = tiny_skia::Pixmap::new(phys_w, phys_h).unwrap();
 
         pixmap.fill(tiny_skia::Color::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
         let transform = tiny_skia::Transform::from_scale(sf as f32, sf as f32);
 
         for info in &self.shapes {
-            if let Some(path) = self.to_skia_path(&info) {
-                let col = to_skia_colour(&info.colour);
-                let mut paint = tiny_skia::Paint::default();
-                paint.set_color(col);
-                let rule = match info.rule {
-                    ClippingRule::NonWinding => tiny_skia::FillRule::Winding,
-                    ClippingRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
-                };
-                pixmap.fill_path(&path, &paint, rule, transform, None);
-            }
+            let path = self.to_skia_path(&info.path).unwrap();
+            let col = to_skia_colour(&info.colour);
+            let mut paint = tiny_skia::Paint::default();
+            paint.set_color(col);
+            let rule = match info.rule {
+                ClippingRule::NonWinding => tiny_skia::FillRule::Winding,
+                ClippingRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
+            };
+            pixmap.fill_path(&path, &paint, rule, transform, None);
+
+            let mask = self.mk_mask(&info.clips);
+            pixmap.apply_mask(&mask);
         }
+
 
         for glyph in &self.rasterized_glyphs {
             let mut glyph_pixmap = tiny_skia::Pixmap::new(glyph.w as u32, glyph.h as u32).unwrap();

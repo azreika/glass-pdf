@@ -24,6 +24,7 @@ pub struct GlyphInfo {
     pub font_id: String,
     pub width: f64,
     pub colour: Option<Vec<f64>>,
+    pub clips: Vec<(ClippingRule,Vec<PathPiece>)>,
 }
 
 #[derive(Clone, Debug)]
@@ -31,4 +32,5 @@ pub struct PathInfo {
     pub path: Vec<PathPiece>,
     pub colour: Option<Vec<f64>>,
     pub rule: ClippingRule,
+    pub clips: Vec<(ClippingRule,Vec<PathPiece>)>,
 }
