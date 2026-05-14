@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::content::graphics::{ClippingRule, GraphicsState, PathOp};
 use crate::content::tokenizer::Token;
 use crate::fonts::Font;
 
@@ -20,55 +21,6 @@ enum Value {
     Array(Vec<Value>),
     StringBytes(Vec<u8>),
     Dict(HashMap<String,Value>),
-}
-
-#[derive(Clone, Debug)]
-pub enum PathPiece {
-    Rect { x: f64, y: f64, w: f64, h: f64 },
-    MoveTo { x: f64, y: f64 },
-    LineTo { x: f64, y: f64 },
-    Close,
-}
-
-#[derive(Clone, Debug, Copy)]
-pub enum ClippingRule {
-    Winding,
-    EvenOdd,
-}
-
-#[derive(Clone,Debug)]
-struct GraphicsState {
-    ctm: Matrix,
-
-    cs_nostroke: Option<String>,
-    colour_nostroke: Color,
-
-    path: Vec<PathPiece>,
-    clips: Vec<(ClippingRule, Vec<PathPiece>)>,
-}
-
-impl GraphicsState {
-    fn new() -> Self {
-        return GraphicsState {
-            ctm: Matrix::new(),
-            cs_nostroke: None,
-            colour_nostroke: Color::Default,
-            path: vec![],
-            clips: vec![],
-        };
-    }
-
-    fn move_to(&mut self, x: f64, y: f64) {
-        self.path.push(PathPiece::MoveTo { x, y });
-    }
-
-    fn line_to(&mut self, x: f64, y: f64) {
-        self.path.push(PathPiece::LineTo { x, y });
-    }
-
-    fn close_path(&mut self) {
-        self.path.push(PathPiece::Close);
-    }
 }
 
 impl TextState {
@@ -95,8 +47,8 @@ pub struct ContentStreamer {
 
     text_state: TextState,
 
-    graphics_state: GraphicsState,
-    graphics_state_stack: Vec<GraphicsState>,
+    graphics: GraphicsState,
+    graphics_stack: Vec<GraphicsState>,
 
     scopes: Vec<Scope>,
 
@@ -156,8 +108,8 @@ impl ContentStreamer {
             text_state: TextState::new(),
             ctx,
             stack: vec![],
-            graphics_state_stack: vec![],
-            graphics_state: GraphicsState::new(),
+            graphics_stack: vec![],
+            graphics: GraphicsState::new(),
             scopes: vec![Scope::TopLevel],
         };
     }
@@ -179,12 +131,8 @@ impl ContentStreamer {
     }
 
     fn num_colour_components(&self) -> u8 {
-        let cs = self.graphics_state.cs_nostroke.as_ref().unwrap();
+        let cs = self.graphics.cs_nostroke.as_ref().unwrap();
         return self.ctx.cs_lib.num_components(cs.to_string());
-    }
-
-    fn set_colour_nostroke(&mut self, vv: Color) {
-        self.graphics_state.colour_nostroke = vv;
     }
 
     pub fn process_stream(ctx: &PageCtx, toks: &Vec<Token>) -> Vec<Message> {
@@ -266,11 +214,11 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::SaveGraphicsState => {
-                self.graphics_state_stack.push(self.graphics_state.clone());
+                self.graphics_stack.push(self.graphics.clone());
                 return Message::Noop;
             },
             Token::RestoreGraphicsState => {
-                self.graphics_state = self.graphics_state_stack.pop().unwrap();
+                self.graphics = self.graphics_stack.pop().unwrap();
                 return Message::Noop;
             },
             Token::Rect => {
@@ -279,23 +227,21 @@ impl ContentStreamer {
                 let y = self.pop_number();
                 let x = self.pop_number();
 
-                let rect = PathPiece::Rect { x, y, w, h };
-                self.graphics_state.path.push(rect);
+                let rect = PathOp::Rect { x, y, w, h };
+                self.graphics.draw(rect);
                 return Message::Noop;
             },
             Token::W => {
-                let path = self.graphics_state.path.clone();
-                self.graphics_state.clips.push((ClippingRule::Winding, path));
+                self.graphics.clip_path(ClippingRule::Winding);
                 return Message::Noop;
             },
             Token::WStar => {
-                let path = self.graphics_state.path.clone();
-                self.graphics_state.clips.push((ClippingRule::EvenOdd, path));
+                self.graphics.clip_path(ClippingRule::EvenOdd);
                 return Message::Noop;
             },
             Token::N => {
                 // Clipping Path Operator - end path object without filling it
-                self.graphics_state.path.clear();
+                self.graphics.clear_path();
                 return Message::Noop;
             },
             Token::CsNoStroke => {
@@ -310,7 +256,7 @@ impl ContentStreamer {
                     vv.push(self.pop_number() as f32);
                 }
                 vv.reverse();
-                self.set_colour_nostroke(to_color(vv));
+                self.graphics.set_color_fill(to_color(vv));
                 return Message::Noop;
             },
             Token::I => {
@@ -325,21 +271,20 @@ impl ContentStreamer {
                 }
                 mat.reverse();
                 let mat = Matrix::vec6_to_matrix(&mat);
-                let result = multiply_3d(self.curr_ctm(), &mat);
-                self.graphics_state.ctm = result;
+                self.graphics.ctm = multiply_3d(self.curr_ctm(), &mat);
                 return Message::Noop;
             },
             Token::M => {
                 // Move To point
                 let y = self.pop_number();
                 let x = self.pop_number();
-                self.graphics_state.move_to(x, y);
+                self.graphics.move_to(x, y);
                 return Message::Noop;
             },
             Token::L => {
                 let y = self.pop_number();
                 let x = self.pop_number();
-                self.graphics_state.line_to(x, y);
+                self.graphics.line_to(x, y);
                 return Message::Noop;
             },
             Token::V | Token::Y => {
@@ -351,7 +296,7 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::H => {
-                self.graphics_state.close_path();
+                self.graphics.close_path();
                 return Message::Noop;
             },
             Token::BDC => {
@@ -370,29 +315,19 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::Fill => {
-                let msg = Message::DrawPath(PathInfo {
-                    path: self.graphics_state.path.clone(),
-                    colour: self.graphics_state.colour_nostroke.clone(),
-                    rule: ClippingRule::Winding,
-                    clips: self.graphics_state.clips.clone(),
-                });
-                self.graphics_state.path.clear();
-                return msg;
+                return Message::DrawPath(
+                    self.graphics.finish_path(ClippingRule::Winding),
+                );
             },
             Token::FillStar => {
-                let msg = Message::DrawPath(PathInfo {
-                    path: self.graphics_state.path.clone(),
-                    colour: self.graphics_state.colour_nostroke.clone(),
-                    rule: ClippingRule::EvenOdd,
-                    clips: self.graphics_state.clips.clone(),
-                });
-                self.graphics_state.path.clear();
-                return msg;
+                return Message::DrawPath(
+                    self.graphics.finish_path(ClippingRule::EvenOdd),
+                );
             },
             Token::GNonStroke => {
                 // Sets in device gray so 0->1, 1 is white
                 let val = self.pop_number() as f32;
-                self.set_colour_nostroke(Color::Gray(val));
+                self.graphics.set_color_fill(Color::Gray(val));
                 return Message::Noop;
             },
             Token::GStroke => {
@@ -405,7 +340,7 @@ impl ContentStreamer {
                 let b = self.pop_number() as f32;
                 let g = self.pop_number() as f32;
                 let r = self.pop_number() as f32;
-                self.set_colour_nostroke(Color::RGB(r, g, b));
+                self.graphics.set_color_fill(Color::RGB(r, g, b));
                 return Message::Noop;
             },
             Token::RGStroke => {
@@ -449,7 +384,7 @@ impl ContentStreamer {
     }
 
     fn curr_ctm(&self) -> &Matrix {
-        return &self.graphics_state.ctm;
+        return &self.graphics.ctm;
     }
 
     fn text_x(&self) -> f64 {
@@ -483,7 +418,6 @@ impl ContentStreamer {
             other => panic!("expected string bytes, got {:?}", other)
         };
     }
-
 
     fn pop_array(&mut self) -> Vec<Value> {
         return match self.stack.pop().unwrap() {
@@ -529,8 +463,8 @@ impl ContentStreamer {
                 size: size,
                 font_id: self.get_font_id(),
                 width: cwidth,
-                colour: self.graphics_state.colour_nostroke.clone(),
-                clips: self.graphics_state.clips.clone(),
+                colour: self.graphics.color_fill.clone(),
+                clips: self.graphics.clips.clone(),
             }));
 
             self.set_x(self.text_x() + cwidth);
@@ -548,7 +482,7 @@ impl ContentStreamer {
     }
 
     fn set_cs_nostroke(&mut self, cs_id: String) {
-        self.graphics_state.cs_nostroke = Some(cs_id);
+        self.graphics.cs_nostroke = Some(cs_id);
     }
 
     fn move_x(&mut self, x: f64) {
@@ -654,8 +588,8 @@ fn saved_graphics() {
 
     // Should all be no-ops
     assert_eq!(messages.len(), 0);
-    assert_eq!(fstate.graphics_state.colour_nostroke, Color::Default);
-    assert_eq!(fstate.graphics_state_stack.len(), 0);
+    assert_eq!(fstate.graphics.color_fill, Color::Default);
+    assert!(fstate.graphics_stack.is_empty());
 }
 
 #[test]
@@ -672,8 +606,8 @@ fn simple_colour() {
 
     let (messages, streamer) = collect_messages(ctx, toks);
     assert_eq!(messages.len(), 0);
-    assert_eq!(streamer.graphics_state.cs_nostroke, Some("Cs1".to_string()));
-    assert_eq!(streamer.graphics_state.colour_nostroke, Color::Gray(0.2));
+    assert_eq!(streamer.graphics.cs_nostroke, Some("Cs1".to_string()));
+    assert_eq!(streamer.graphics.color_fill, Color::Gray(0.2));
 }
 
 fn glyph_char(msg: &Message) -> char {

@@ -8,7 +8,8 @@ use winit::application::ApplicationHandler;
 use winit::event::{MouseScrollDelta, WindowEvent};
 use winit::window::Window;
 
-use crate::content::streamer::{ClippingRule, ContentStreamer, PathPiece};
+use crate::content::graphics::{ClippingRule, PathOp};
+use crate::content::streamer::ContentStreamer;
 use crate::content::tokenizer::Token;
 use crate::fonts::{Font, FontLib};
 use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
@@ -101,14 +102,14 @@ impl App {
         );
     }
 
-    fn to_skia_path(&self, path: &Vec<PathPiece>) -> Option<Path> {
+    fn to_skia_path(&self, path: &Vec<PathOp>) -> Option<Path> {
         let mut pb = tiny_skia::PathBuilder::new();
         for piece in path {
             match piece {
-                PathPiece::MoveTo { x, y } => pb.move_to(*x as f32, *y as f32),
-                PathPiece::LineTo { x, y } => pb.line_to(*x as f32, *y as f32),
-                PathPiece::Close => pb.close(),
-                PathPiece::Rect { x, y, w, h } => {
+                PathOp::MoveTo { x, y } => pb.move_to(*x as f32, *y as f32),
+                PathOp::LineTo { x, y } => pb.line_to(*x as f32, *y as f32),
+                PathOp::Close => pb.close(),
+                PathOp::Rect { x, y, w, h } => {
                     pb.push_rect(
                         tiny_skia::Rect::from_xywh(*x as f32, *y as f32, *w as f32, *h as f32).unwrap()
                     );
@@ -128,7 +129,7 @@ impl App {
         return (self.ctx.height as f32 * sf) as u32;
     }
 
-    fn mk_mask(&self, clips: &Vec<(ClippingRule,Vec<PathPiece>)>) -> Mask {
+    fn mk_mask(&self, clips: &Vec<(ClippingRule,Vec<PathOp>)>) -> Mask {
         let mut base_map = Pixmap::new(self.phys_w(), self.phys_h()).unwrap();
         base_map.fill(SkiaColor::WHITE);
 
@@ -149,7 +150,7 @@ impl App {
         return Mask::from_pixmap(base_map.as_ref(), tiny_skia::MaskType::Alpha);
     }
 
-    fn fill_path(&self, pixmap: &mut Pixmap, path: &Vec<PathPiece>, colour: SkiaColor, rule: ClippingRule, mask: Option<&Mask>) {
+    fn fill_path(&self, pixmap: &mut Pixmap, path: &Vec<PathOp>, colour: SkiaColor, rule: ClippingRule, mask: Option<&Mask>) {
         let path = self.to_skia_path(path).unwrap();
         let mut paint = tiny_skia::Paint::default();
         paint.set_color(colour);
