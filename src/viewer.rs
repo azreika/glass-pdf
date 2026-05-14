@@ -137,7 +137,7 @@ impl App {
         for (rule, clip) in clips {
             let skia_rule = match rule {
                 ClippingRule::EvenOdd => FillRule::EvenOdd,
-                ClippingRule::NonWinding => FillRule::Winding,
+                ClippingRule::Winding => FillRule::Winding,
             };
 
             let mask_path = self.to_skia_path(&clip).unwrap();
@@ -153,12 +153,8 @@ impl App {
         let path = self.to_skia_path(path).unwrap();
         let mut paint = tiny_skia::Paint::default();
         paint.set_color(colour);
-        let rule = match rule {
-            ClippingRule::NonWinding => tiny_skia::FillRule::Winding,
-            ClippingRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
-        };
         let transform = self.sf_transform();
-        pixmap.fill_path(&path, &paint, rule, transform, mask);
+        pixmap.fill_path(&path, &paint, FillRule::from(rule), transform, mask);
     }
 
     fn sf_transform(&self) -> Transform {
@@ -307,7 +303,7 @@ impl ApplicationHandler for App {
 }
 
 impl From<&Color> for SkiaColor {
-    fn from(colour: &Color) -> tiny_skia::Color {
+    fn from(colour: &Color) -> SkiaColor {
         match *colour {
             Color::Default => SkiaColor::BLACK,
             Color::RGB(r,g,b) => SkiaColor::from_rgba(r as f32, g as f32, b as f32, 1.0).unwrap(),
@@ -321,6 +317,15 @@ fn alpha_bitmap_to_rgba(bitmap: &[u8], rgb8: [u8; 3]) -> Vec<u8> {
     return bitmap.iter().flat_map(|&a| {
         return [rgb8[0], rgb8[1], rgb8[2], a]
     }).collect();
+}
+
+impl From<ClippingRule> for FillRule {
+    fn from(rule: ClippingRule) -> FillRule {
+        return match rule {
+            ClippingRule::Winding => FillRule::Winding,
+            ClippingRule::EvenOdd => FillRule::EvenOdd,
+        };
+    }
 }
 
 struct RasterGlyphPix {

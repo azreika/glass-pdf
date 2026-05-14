@@ -32,7 +32,7 @@ pub enum PathPiece {
 
 #[derive(Clone, Debug, Copy)]
 pub enum ClippingRule {
-    NonWinding,
+    Winding,
     EvenOdd,
 }
 
@@ -285,7 +285,7 @@ impl ContentStreamer {
             },
             Token::W => {
                 let path = self.graphics_state.path.clone();
-                self.graphics_state.clips.push((ClippingRule::NonWinding, path));
+                self.graphics_state.clips.push((ClippingRule::Winding, path));
                 return Message::Noop;
             },
             Token::WStar => {
@@ -373,7 +373,7 @@ impl ContentStreamer {
                 let msg = Message::DrawPath(PathInfo {
                     path: self.graphics_state.path.clone(),
                     colour: self.graphics_state.colour_nostroke.clone(),
-                    rule: ClippingRule::NonWinding,
+                    rule: ClippingRule::Winding,
                     clips: self.graphics_state.clips.clone(),
                 });
                 self.graphics_state.path.clear();
