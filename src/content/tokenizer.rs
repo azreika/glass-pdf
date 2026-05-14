@@ -22,6 +22,7 @@ pub enum Token {
     SetColourStroke,
     SetColourNoStroke,
     Fill,
+    FillStar,
     I,
     CmStroke,
     BT,
@@ -44,7 +45,6 @@ pub enum Token {
     GStroke,
     RGNonStroke,
     RGStroke,
-    Star,
     WLineWidth,
     LineCap,
     LineJoin,
@@ -65,7 +65,6 @@ impl Tokenizer<Token> for ContentTokenizer {
         return match word {
             "SC" => Token::SetColourStroke,
             "sc" => Token::SetColourNoStroke,
-            "f" => Token::Fill,
             "i" => Token::I,
             "cs" => Token::CsNoStroke,
             "CS" => Token::CsStroke,
@@ -91,7 +90,6 @@ impl Tokenizer<Token> for ContentTokenizer {
             "G" => Token::GStroke,
             "rg" => Token::RGNonStroke,
             "RG" => Token::RGStroke,
-            "*" => Token::Star,
             "w" => Token::WLineWidth,
             "J" => Token::LineCap,
             "j" => Token::LineJoin,
@@ -125,6 +123,16 @@ impl ContentTokenizer {
             return Token::WStar;
         } else {
             return Token::W;
+        }
+    }
+
+    fn lex_f(&mut self) -> Token {
+        self.eat_char('f');
+        if self.peek() == '*' {
+            self.eat_char('*');
+            return Token::FillStar;
+        } else {
+            return Token::Fill;
         }
     }
 
@@ -223,6 +231,7 @@ impl ContentTokenizer {
         self.lex_whitespace();
         return match self.peek() {
             'W' => self.lex_w(),
+            'f' => self.lex_f(),
             '/' => self.lex_identifier(),
             '(' => self.lex_string(),
             '\0' => self.lex_null(),

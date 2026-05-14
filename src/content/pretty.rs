@@ -139,7 +139,6 @@ fn to_txt(tok: Token) -> String {
         Token::GStroke => "G",
         Token::RGNonStroke => "rg",
         Token::RGStroke => "RG",
-        Token::Star => "*",
         Token::WLineWidth => "w",
         Token::LineCap => "J",
         Token::LineJoin => "j",
@@ -151,6 +150,7 @@ fn to_txt(tok: Token) -> String {
         Token::N => "n",
         Token::W => "W",
         Token::WStar => "W*",
+        Token::FillStar => "f*",
         _ => "unknown",
     }.to_string();
 }

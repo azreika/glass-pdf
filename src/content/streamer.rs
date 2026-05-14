@@ -368,6 +368,16 @@ impl ContentStreamer {
                 self.graphics_state.path.clear();
                 return msg;
             },
+            Token::FillStar => {
+                let msg = Message::DrawPath(PathInfo {
+                    path: self.graphics_state.path.clone(),
+                    colour: self.graphics_state.colour_nostroke.clone(),
+                    rule: ClippingRule::EvenOdd,
+                    clips: self.graphics_state.clips.clone(),
+                });
+                self.graphics_state.path.clear();
+                return msg;
+            },
             Token::GNonStroke => {
                 // Sets in device gray so 0->1, 1 is white
                 let val = self.pop_number();
@@ -392,10 +402,6 @@ impl ContentStreamer {
                 let _n2 = self.pop_number();
                 let _n3 = self.pop_number();
                 println!("implement rg non stroke");
-                return Message::Noop;
-            },
-            Token::Star => {
-                println!("bro this is wrong LOL use f* NOT *");
                 return Message::Noop;
             },
             Token::WLineWidth => {

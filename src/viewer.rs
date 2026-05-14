@@ -146,7 +146,6 @@ impl App {
                 ClippingRule::NonWinding => FillRule::Winding,
             };
 
-
             let mask_path = self.to_skia_path(&clip).unwrap();
             let mut paint = tiny_skia::Paint::default();
             paint.set_color(Color::BLACK);
@@ -157,7 +156,7 @@ impl App {
 
     fn build_base_pixmap(&mut self) -> Pixmap {
         let sf = self.cached_scale_factor as f64;
-        // Pixmap in physical pixels at zoom=1
+
         let phys_w = self.phys_w();
         let phys_h = self.phys_h();
         let mut pixmap = tiny_skia::Pixmap::new(phys_w, phys_h).unwrap();
@@ -174,12 +173,9 @@ impl App {
                 ClippingRule::NonWinding => tiny_skia::FillRule::Winding,
                 ClippingRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
             };
-            pixmap.fill_path(&path, &paint, rule, transform, None);
-
             let mask = self.mk_mask(&info.clips);
-            pixmap.apply_mask(&mask);
+            pixmap.fill_path(&path, &paint, rule, transform, Some(&mask));
         }
-
 
         for glyph in &self.rasterized_glyphs {
             let mut glyph_pixmap = tiny_skia::Pixmap::new(glyph.w as u32, glyph.h as u32).unwrap();
