@@ -36,9 +36,9 @@ pub struct PathInfo {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Color {
-    RGB(f64, f64, f64),
-    RGBA(f64, f64, f64, f64),
-    Gray(f64),
+    RGB(f32, f32, f32),
+    RGBA(f32, f32, f32, f32),
+    Gray(f32),
     Default,
 }
 

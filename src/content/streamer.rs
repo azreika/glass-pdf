@@ -126,7 +126,7 @@ fn parse_value(tok: Token) -> Value {
     };
 }
 
-fn to_color(col: Vec<f64>) -> Color {
+fn to_color(col: Vec<f32>) -> Color {
     if col.len() == 1 {
         return Color::Gray(col[0]);
     }
@@ -307,7 +307,7 @@ impl ContentStreamer {
                 let num_components = self.num_colour_components();
                 let mut vv = vec![];
                 for _ in 0..num_components {
-                    vv.push(self.pop_number());
+                    vv.push(self.pop_number() as f32);
                 }
                 vv.reverse();
                 self.set_colour_nostroke(to_color(vv));
@@ -391,7 +391,7 @@ impl ContentStreamer {
             },
             Token::GNonStroke => {
                 // Sets in device gray so 0->1, 1 is white
-                let val = self.pop_number();
+                let val = self.pop_number() as f32;
                 self.set_colour_nostroke(Color::Gray(val));
                 return Message::Noop;
             },
@@ -402,9 +402,9 @@ impl ContentStreamer {
                 return Message::Noop;
             },
             Token::RGNonStroke => {
-                let b = self.pop_number();
-                let g = self.pop_number();
-                let r = self.pop_number();
+                let b = self.pop_number() as f32;
+                let g = self.pop_number() as f32;
+                let r = self.pop_number() as f32;
                 self.set_colour_nostroke(Color::RGB(r, g, b));
                 return Message::Noop;
             },

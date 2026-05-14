@@ -48,7 +48,7 @@ struct App {
     shapes: Vec<PathInfo>,
     glyphs: Vec<GlyphInfo>,
 
-    zoom_scale: f64,
+    zoom_scale: f32,
     cached_scale_factor: f32,
     rasterized_glyphs: Vec<RasterGlyphPix>,
 
@@ -96,7 +96,7 @@ impl App {
             0, 0,
             base.as_ref(),
             &tiny_skia::PixmapPaint::default(),
-            tiny_skia::Transform::from_scale(self.zoom_scale as f32, self.zoom_scale as f32),
+            tiny_skia::Transform::from_scale(self.zoom_scale, self.zoom_scale),
             None,
         );
     }
@@ -119,13 +119,13 @@ impl App {
     }
 
     fn phys_w(&self) -> u32 {
-        let sf = self.cached_scale_factor as f64;
-        return (self.ctx.width * sf) as u32;
+        let sf = self.cached_scale_factor;
+        return (self.ctx.width as f32 * sf) as u32;
     }
 
     fn phys_h(&self) -> u32 {
-        let sf = self.cached_scale_factor as f64;
-        return (self.ctx.height * sf) as u32;
+        let sf = self.cached_scale_factor;
+        return (self.ctx.height as f32 * sf) as u32;
     }
 
     fn mk_mask(&self, clips: &Vec<(ClippingRule,Vec<PathPiece>)>) -> Mask {
@@ -158,8 +158,8 @@ impl App {
     }
 
     fn sf_transform(&self) -> Transform {
-        let sf = self.cached_scale_factor as f64;
-        return Transform::from_scale(sf as f32, sf as f32);
+        let sf = self.cached_scale_factor;
+        return Transform::from_scale(sf, sf);
     }
 
     fn draw_shapes(&self, pixmap: &mut Pixmap) {
@@ -262,7 +262,7 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                assert_eq!(self.window.as_ref().unwrap().scale_factor(), self.cached_scale_factor as f64);
+                assert_eq!(self.window.as_ref().unwrap().scale_factor() as f32, self.cached_scale_factor);
                 self.draw_to_pixmap();
                 let (w, h) = self.window_size();
                 let pixmap = self.out_pixmap.as_ref().unwrap();
@@ -288,8 +288,8 @@ impl ApplicationHandler for App {
 
             WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
                 let y = match delta {
-                    MouseScrollDelta::LineDelta(y, .. ) => y as f64,
-                    MouseScrollDelta::PixelDelta(y, ..) => y.y,
+                    MouseScrollDelta::LineDelta(y, .. ) => y,
+                    MouseScrollDelta::PixelDelta(y, ..) => y.y as f32,
                 };
                 if y != 0.0 {
                     self.zoom_scale *= 1.0 + y * 0.02;
@@ -306,9 +306,9 @@ impl From<&Color> for SkiaColor {
     fn from(colour: &Color) -> SkiaColor {
         match *colour {
             Color::Default => SkiaColor::BLACK,
-            Color::RGB(r,g,b) => SkiaColor::from_rgba(r as f32, g as f32, b as f32, 1.0).unwrap(),
-            Color::RGBA(r,g,b,a) => SkiaColor::from_rgba(r as f32, g as f32, b as f32, a as f32).unwrap(),
-            Color::Gray(g) => SkiaColor::from_rgba(g as f32, g as f32, g as f32, 1.0).unwrap(),
+            Color::RGB(r,g,b) => SkiaColor::from_rgba(r, g, b, 1.0).unwrap(),
+            Color::RGBA(r,g,b,a) => SkiaColor::from_rgba(r, g, b, a).unwrap(),
+            Color::Gray(g) => SkiaColor::from_rgba(g, g, g, 1.0).unwrap(),
         }
     }
 }
