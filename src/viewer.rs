@@ -2,7 +2,8 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use softbuffer::{Context, Surface};
-use tiny_skia::{Color, FillRule, Mask, Path, Pixmap, Transform};
+use tiny_skia::{FillRule, Mask, Path, Pixmap, Transform};
+use tiny_skia::Color as SkiaColor;
 use winit::application::ApplicationHandler;
 use winit::event::{MouseScrollDelta, WindowEvent};
 use winit::window::Window;
@@ -90,7 +91,7 @@ impl App {
         let output = self.out_pixmap.as_mut().unwrap();
         let base = self.base_pixmap.as_ref().unwrap();
 
-        output.fill(tiny_skia::Color::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
+        output.fill(SkiaColor::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
         output.draw_pixmap(
             0, 0,
             base.as_ref(),
@@ -129,7 +130,7 @@ impl App {
 
     fn mk_mask(&self, clips: &Vec<(ClippingRule,Vec<PathPiece>)>) -> Mask {
         let mut base_map = Pixmap::new(self.phys_w(), self.phys_h()).unwrap();
-        base_map.fill(Color::WHITE);
+        base_map.fill(SkiaColor::WHITE);
 
         let mut mask = Mask::new(self.phys_w(), self.phys_h()).unwrap();
 
@@ -148,7 +149,7 @@ impl App {
         return Mask::from_pixmap(base_map.as_ref(), tiny_skia::MaskType::Alpha);
     }
 
-    fn fill_path(&self, pixmap: &mut Pixmap, path: &Vec<PathPiece>, colour: Color, rule: ClippingRule, mask: Option<&Mask>) {
+    fn fill_path(&self, pixmap: &mut Pixmap, path: &Vec<PathPiece>, colour: SkiaColor, rule: ClippingRule, mask: Option<&Mask>) {
         let path = self.to_skia_path(path).unwrap();
         let mut paint = tiny_skia::Paint::default();
         paint.set_color(colour);
@@ -173,7 +174,7 @@ impl App {
         }
     }
 
-    fn init_pixmap(&self, color: Color) -> Pixmap {
+    fn init_pixmap(&self, color: SkiaColor) -> Pixmap {
         let phys_w = self.phys_w();
         let phys_h = self.phys_h();
         let mut pixmap = tiny_skia::Pixmap::new(phys_w, phys_h).unwrap();
