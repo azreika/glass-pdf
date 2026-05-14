@@ -4,7 +4,7 @@ use crate::content::tokenizer::Token;
 use crate::fonts::Font;
 
 use crate::viewer::PageCtx;
-use crate::viewer_message::{GlyphInfo, Message, PathInfo};
+use crate::viewer_message::{Color, GlyphInfo, Message, PathInfo};
 use crate::transform::{Matrix, multiply_3d};
 
 struct TextState {
@@ -41,7 +41,7 @@ struct GraphicsState {
     ctm: Matrix,
 
     cs_nostroke: Option<String>,
-    colour_nostroke: Option<Vec<f64>>,
+    colour_nostroke: Color,
 
     path: Vec<PathPiece>,
     clips: Vec<(ClippingRule, Vec<PathPiece>)>,
@@ -52,7 +52,7 @@ impl GraphicsState {
         return GraphicsState {
             ctm: Matrix::new(),
             cs_nostroke: None,
-            colour_nostroke: None,
+            colour_nostroke: Color::Default,
             path: vec![],
             clips: vec![],
         };
@@ -126,6 +126,18 @@ fn parse_value(tok: Token) -> Value {
     };
 }
 
+fn to_color(col: Vec<f64>) -> Color {
+    if col.len() == 1 {
+        return Color::Gray(col[0]);
+    }
+    if col.len() == 3 {
+        return Color::RGB(col[0], col[1], col[2]);
+    }
+    assert_eq!(col.len(), 4);
+    return Color::RGBA(col[0], col[1], col[2], col[3]);
+
+}
+
 fn is_value(tok: &Token) -> bool {
     return matches!(tok,
         Token::Identifier(_)    |
@@ -171,8 +183,8 @@ impl ContentStreamer {
         return self.ctx.cs_lib.num_components(cs.to_string());
     }
 
-    fn set_colour_nostroke(&mut self, vv: Vec<f64>) {
-        self.graphics_state.colour_nostroke = Some(vv);
+    fn set_colour_nostroke(&mut self, vv: Color) {
+        self.graphics_state.colour_nostroke = vv;
     }
 
     pub fn process_stream(ctx: &PageCtx, toks: &Vec<Token>) -> Vec<Message> {
@@ -298,7 +310,7 @@ impl ContentStreamer {
                     vv.push(self.pop_number());
                 }
                 vv.reverse();
-                self.set_colour_nostroke(vv);
+                self.set_colour_nostroke(to_color(vv));
                 return Message::Noop;
             },
             Token::I => {
@@ -380,7 +392,7 @@ impl ContentStreamer {
             Token::GNonStroke => {
                 // Sets in device gray so 0->1, 1 is white
                 let val = self.pop_number();
-                self.set_colour_nostroke([val].to_vec());
+                self.set_colour_nostroke(Color::Gray(val));
                 return Message::Noop;
             },
             Token::GStroke => {
@@ -393,7 +405,7 @@ impl ContentStreamer {
                 let b = self.pop_number();
                 let g = self.pop_number();
                 let r = self.pop_number();
-                self.set_colour_nostroke([r,g,b].to_vec());
+                self.set_colour_nostroke(Color::RGB(r, g, b));
                 return Message::Noop;
             },
             Token::RGStroke => {
@@ -642,7 +654,7 @@ fn saved_graphics() {
 
     // Should all be no-ops
     assert_eq!(messages.len(), 0);
-    assert_eq!(fstate.graphics_state.colour_nostroke, None);
+    assert_eq!(fstate.graphics_state.colour_nostroke, Color::Default);
     assert_eq!(fstate.graphics_state_stack.len(), 0);
 }
 
@@ -661,7 +673,7 @@ fn simple_colour() {
     let (messages, streamer) = collect_messages(ctx, toks);
     assert_eq!(messages.len(), 0);
     assert_eq!(streamer.graphics_state.cs_nostroke, Some("Cs1".to_string()));
-    assert_eq!(streamer.graphics_state.colour_nostroke, Some(vec![0.2]));
+    assert_eq!(streamer.graphics_state.colour_nostroke, Color::Gray(0.2));
 }
 
 fn glyph_char(msg: &Message) -> char {

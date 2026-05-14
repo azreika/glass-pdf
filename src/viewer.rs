@@ -12,7 +12,7 @@ use crate::content::streamer::{ClippingRule, ContentStreamer, PathPiece};
 use crate::content::tokenizer::Token;
 use crate::fonts::{Font, FontLib};
 use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
-use crate::viewer_message::{GlyphInfo, Message, PathInfo};
+use crate::viewer_message::{Color, GlyphInfo, Message, PathInfo};
 
 #[derive(Clone, Debug)]
 pub struct PageCtx {
@@ -169,7 +169,7 @@ impl App {
     fn draw_shapes(&self, pixmap: &mut Pixmap) {
         for info in &self.shapes {
             let mask = self.mk_mask(&info.clips);
-            let col = to_skia_colour(&info.colour);
+            let col = SkiaColor::from(&info.colour);
             self.fill_path(pixmap, &info.path, col, info.rule, Some(&mask));
         }
     }
@@ -306,53 +306,21 @@ impl ApplicationHandler for App {
     }
 }
 
-fn to_skia_colour(colour: &Option<Vec<f64>>) -> tiny_skia::Color {
-    match colour {
-        None => tiny_skia::Color::BLACK,
-        Some(vv) if vv.len() == 3 => {
-            tiny_skia::Color::from_rgba(vv[0] as f32, vv[1] as f32, vv[2] as f32, 1.0).unwrap()
+impl From<&Color> for SkiaColor {
+    fn from(colour: &Color) -> tiny_skia::Color {
+        match *colour {
+            Color::Default => SkiaColor::BLACK,
+            Color::RGB(r,g,b) => SkiaColor::from_rgba(r as f32, g as f32, b as f32, 1.0).unwrap(),
+            Color::RGBA(r,g,b,a) => SkiaColor::from_rgba(r as f32, g as f32, b as f32, a as f32).unwrap(),
+            Color::Gray(g) => SkiaColor::from_rgba(g as f32, g as f32, g as f32, 1.0).unwrap(),
         }
-        Some(vv) if vv.len() == 1 => {
-            let g = vv[0] as f32;
-            tiny_skia::Color::from_rgba(g, g, g, 1.0).unwrap()
-        }
-        _ => tiny_skia::Color::BLACK,
     }
 }
 
-fn colourize_bitmap(bitmap: &Vec<u8>, colour: &Option<Vec<f64>>) -> Vec<u8> {
-    match colour {
-        Some(vv) => {
-            if vv.len() == 3 {
-                // RGB
-                let rgb = vv.iter().map(|a| (a * 255.0) as u8).collect::<Vec<u8>>();
-                let rgba: Vec<u8> = bitmap
-                    .iter()
-                    .flat_map(|&a| {
-                        let mut vv = rgb.clone();
-                        vv.push(a);
-                        return vv;
-                    })
-                    .collect();
-                return rgba;
-            } else if vv.len() == 1 {
-                let g = (vv[0] * 255.0) as u8;
-                // Grayscale
-                return bitmap
-                    .iter()
-                    .flat_map(|&a| {
-                        return [g, g, g, a];
-                    })
-                    .collect();
-            } else {
-                // CMYK?
-                panic!("unexpected length of colour: {}", bitmap.len());
-            }
-        }
-        None => {
-            return [0, 0, 0].to_vec();
-        }
-    };
+fn alpha_bitmap_to_rgba(bitmap: &[u8], rgb8: [u8; 3]) -> Vec<u8> {
+    return bitmap.iter().flat_map(|&a| {
+        return [rgb8[0], rgb8[1], rgb8[2], a]
+    }).collect();
 }
 
 struct RasterGlyphPix {
@@ -384,7 +352,7 @@ fn rasterize_glyph_pixels(
             continue;
         }
 
-        let rgba = colourize_bitmap(&bitmap, &info.colour);
+        let rgba = alpha_bitmap_to_rgba(&bitmap, info.colour.to_rgb8());
 
         let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
         let x = info.x + gap;

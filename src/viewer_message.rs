@@ -22,14 +22,34 @@ pub struct GlyphInfo {
     pub size: f64,
     pub font_id: String,
     pub width: f64,
-    pub colour: Option<Vec<f64>>,
+    pub colour: Color,
     pub clips: Vec<(ClippingRule,Vec<PathPiece>)>,
 }
 
 #[derive(Clone, Debug)]
 pub struct PathInfo {
     pub path: Vec<PathPiece>,
-    pub colour: Option<Vec<f64>>,
+    pub colour: Color,
     pub rule: ClippingRule,
     pub clips: Vec<(ClippingRule,Vec<PathPiece>)>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Color {
+    RGB(f64, f64, f64),
+    RGBA(f64, f64, f64, f64),
+    Gray(f64),
+    Default,
+}
+
+impl Color {
+    pub fn to_rgb8(&self) -> [u8; 3] {
+        let to_u8 = |t| (t * 255.0) as u8;
+        match self {
+            Color::RGB(r, g, b) => [to_u8(r), to_u8(g), to_u8(b)],
+            Color::Gray(g) => [to_u8(g), to_u8(g), to_u8(g)],
+            _ => panic!("unexpected color"),
+        }
+
+    }
 }
