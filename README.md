@@ -1,13 +1,13 @@
-# GlassPDF
+# Glass PDF
 
 PDF Scaper and Viewer.
 
-More specifically, a
-    **G**lyph
-    **L**ayout
-    **A**nd
-    **S**tructure
-    **S**canner
+More specifically, a <br/>
+    **G**lyph <br/>
+    **L**ayout <br/>
+    **A**nd <br/>
+    **S**tructure <br/>
+    **S**canner <br/>
 for PDF files.
 
 ## TODO
