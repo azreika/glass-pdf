@@ -43,11 +43,46 @@ pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
     event_loop.run_app(&mut App::new(page_ctx, tokens)).unwrap();
 }
 
-struct PanInfo {
+struct ViewInfo {
     pan_x: f32,
     pan_y: f32,
+    zoom_scale: f32,
     is_panning: bool,
     last_cursor: Option<(f32, f32)>,
+}
+
+impl ViewInfo {
+    fn new() -> Self {
+        return ViewInfo {
+            pan_x: 0.0,
+            pan_y: 0.0,
+            zoom_scale: 1.0,
+            is_panning: false,
+            last_cursor: None,
+        };
+    }
+
+    fn zoom_in(&mut self, y: f32) {
+        self.zoom_scale *= 1.0 + y * 0.02;
+        self.zoom_scale = self.zoom_scale.clamp(0.1, 10.0);
+    }
+
+    fn toggle_panning(&mut self, v: bool) {
+        self.is_panning = v;
+        if !v {
+            self.last_cursor = None;
+        };
+    }
+
+    fn move_cursor(&mut self, x: f32, y: f32) {
+        if self.is_panning {
+            if let Some((last_x, last_y)) = self.last_cursor {
+                self.pan_x += x - last_x;
+                self.pan_y += y - last_y;
+            }
+        }
+        self.last_cursor = Some((x, y));
+    }
 }
 
 struct App {
@@ -58,8 +93,7 @@ struct App {
     glyphs: Vec<GlyphInfo>,
     xobjs: Vec<XObjectInfo>,
 
-    zoom_scale: f32,
-    panning: PanInfo,
+    view: ViewInfo,
 
     cached_scale_factor: f32,
     rasterized_glyphs: Vec<RasterGlyphPix>,
@@ -125,8 +159,7 @@ impl App {
             shapes,
             glyphs,
             xobjs,
-            zoom_scale: 1.0,
-            panning: PanInfo { pan_x: 0.0, pan_y: 0.0, is_panning: false, last_cursor: None },
+            view: ViewInfo::new(),
 
             out_pixmap: None,
             base_pixmap: None,
@@ -144,11 +177,7 @@ impl App {
             0, 0,
             base.as_ref(),
             &tiny_skia::PixmapPaint::default(),
-            tiny_skia::Transform::from_row(
-                self.zoom_scale, 0.0,
-                0.0, self.zoom_scale,
-                self.panning.pan_x, self.panning.pan_y,
-            ),
+            tiny_skia::Transform::from(&self.view),
             None,
         );
     }
@@ -356,29 +385,20 @@ impl ApplicationHandler for App {
                     MouseScrollDelta::PixelDelta(y, ..) => y.y as f32,
                 };
                 if y != 0.0 {
-                    self.zoom_scale *= 1.0 + y * 0.02;
-                    self.zoom_scale = self.zoom_scale.clamp(0.1, 10.0);
+                    self.view.zoom_in(y);
                     self.redraw();
                 }
             },
 
             WindowEvent::MouseInput { state, button: winit::event::MouseButton::Left, .. } => {
-                self.panning.is_panning = state == winit::event::ElementState::Pressed;
-                if !self.panning.is_panning {
-                    self.panning.last_cursor = None;
-                }
-            },
+                self.view.toggle_panning(state == winit::event::ElementState::Pressed);
+            }
 
             WindowEvent::CursorMoved { position, .. } => {
-                let pos = (position.x as f32, position.y as f32);
-                if self.panning.is_panning {
-                    if let Some((last_x, last_y)) = self.panning.last_cursor {
-                        self.panning.pan_x += pos.0 - last_x;
-                        self.panning.pan_y += pos.1 - last_y;
-                        self.redraw();
-                    }
+                self.view.move_cursor(position.x as f32, position.y as f32);
+                if self.view.is_panning {
+                    self.redraw();
                 }
-                self.panning.last_cursor = Some(pos);
             },
             _ => {}
         }
@@ -393,6 +413,16 @@ impl From<&Color> for SkiaColor {
             Color::RGBA(r,g,b,a) => SkiaColor::from_rgba(r, g, b, a).unwrap(),
             Color::Gray(g) => SkiaColor::from_rgba(g, g, g, 1.0).unwrap(),
         }
+    }
+}
+
+impl From<&ViewInfo> for tiny_skia::Transform {
+    fn from(view: &ViewInfo) -> tiny_skia::Transform {
+        return tiny_skia::Transform::from_row(
+            view.zoom_scale, 0.0,
+            0.0, view.zoom_scale,
+            view.pan_x, view.pan_y,
+        );
     }
 }
 
