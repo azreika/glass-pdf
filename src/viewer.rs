@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use softbuffer::{Context, Surface};
-use tiny_skia::{FillRule, Mask, Path, Pixmap, Transform};
+use tiny_skia::{FillRule, Mask, Path, Pixmap, PremultipliedColorU8, Transform};
 use tiny_skia::Color as SkiaColor;
 use winit::application::ApplicationHandler;
 use winit::event::{MouseScrollDelta, WindowEvent};
@@ -57,6 +57,30 @@ struct App {
 
     base_pixmap: Option<tiny_skia::Pixmap>,
     out_pixmap: Option<tiny_skia::Pixmap>,
+}
+
+fn pixmap_color(src: &[u8]) -> PremultipliedColorU8 {
+    let alpha = if src.len() == 4 {
+        src[3]
+    } else {
+        assert_eq!(src.len(), 3);
+        255u8
+    };
+
+    let a = alpha as f32 / 255.0;
+
+    return tiny_skia::PremultipliedColorU8::from_rgba(
+        (src[0] as f32 * a) as u8,
+        (src[1] as f32 * a) as u8,
+        (src[2] as f32 * a) as u8,
+        alpha,
+    ).unwrap();
+}
+
+fn draw_color_pixels(pixmap: &mut Pixmap, data: &Vec<u8>, chunksize: usize) {
+    for (dst, src) in pixmap.pixels_mut().iter_mut().zip(data.chunks_exact(chunksize)) {
+        *dst = pixmap_color(&src);
+    }
 }
 
 impl App {
@@ -185,23 +209,9 @@ impl App {
     }
 
     fn draw_xobjs(&self, pixmap: &mut Pixmap) {
-        let sf = self.cached_scale_factor as f64;
-
         for info in &self.xobjs {
-            let data = &info.bytes;
             let mut img_pixmap = Pixmap::new(info.w, info.h).unwrap();
-
-            for (dst, src) in img_pixmap.pixels_mut().iter_mut().zip(data.chunks_exact(3)) {
-                let a = 1.0;
-                // premultiply once, here, when writing into the Pixmap
-                *dst = tiny_skia::PremultipliedColorU8::from_rgba(
-                    (src[0] as f32 * a) as u8,
-                    (src[1] as f32 * a) as u8,
-                    (src[2] as f32 * a) as u8,
-                    255u8,
-                )
-                .unwrap();
-            }
+            draw_color_pixels(&mut img_pixmap, &info.bytes, 3);
 
             pixmap.draw_pixmap(
                 info.x as i32,
@@ -217,21 +227,7 @@ impl App {
     fn draw_glyphs(&self, pixmap: &mut Pixmap) {
         for glyph in &self.rasterized_glyphs {
             let mut glyph_pixmap = tiny_skia::Pixmap::new(glyph.w as u32, glyph.h as u32).unwrap();
-            for (dst, src) in glyph_pixmap
-                .pixels_mut()
-                .iter_mut()
-                .zip(glyph.rgba.chunks_exact(4))
-            {
-                let a = src[3] as f32 / 255.0;
-                // premultiply once, here, when writing into the Pixmap
-                *dst = tiny_skia::PremultipliedColorU8::from_rgba(
-                    (src[0] as f32 * a) as u8,
-                    (src[1] as f32 * a) as u8,
-                    (src[2] as f32 * a) as u8,
-                    src[3],
-                )
-                .unwrap();
-            }
+            draw_color_pixels(&mut glyph_pixmap, &glyph.rgba, 4);
 
             pixmap.draw_pixmap(
                 glyph.x as i32,
