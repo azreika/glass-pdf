@@ -1,10 +1,11 @@
-use crate::content::graphics::{ClippingRule, PathOp};
+use crate::{content::graphics::{ClippingRule, PathOp}, pdf::ast::XObject};
 
 #[derive(Clone, Debug)]
 pub enum Message {
     DrawBlock(Vec<Message>),
     DrawGlyph(GlyphInfo),
     DrawPath(PathInfo),
+    DrawXObject(XObjectInfo),
     Noop,
 }
 
@@ -32,6 +33,17 @@ pub struct PathInfo {
     pub colour: Color,
     pub rule: ClippingRule,
     pub clips: Vec<(ClippingRule,Vec<PathOp>)>,
+}
+
+#[derive(Clone, Debug)]
+pub struct XObjectInfo {
+    pub bytes: Vec<u8>,
+    pub x: f64,
+    pub y: f64,
+    pub w: u32,
+    pub h: u32,
+    pub x_scale: f64,
+    pub y_scale: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]

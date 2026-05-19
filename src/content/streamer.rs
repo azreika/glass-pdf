@@ -4,8 +4,9 @@ use crate::content::graphics::{ClippingRule, GraphicsState, PathOp};
 use crate::content::tokenizer::Token;
 use crate::fonts::Font;
 
+use crate::pdf::ast::XObject;
 use crate::viewer::PageCtx;
-use crate::viewer_message::{Color, GlyphInfo, Message};
+use crate::viewer_message::{Color, GlyphInfo, Message, XObjectInfo};
 use crate::transform::{Matrix, multiply_3d};
 
 struct TextState {
@@ -168,6 +169,25 @@ impl ContentStreamer {
                     self.graphics.finish_path(ClippingRule::EvenOdd),
                 );
             },
+            Token::Do => {
+                // Paint the specified XObject
+                let name = self.pop_string();
+                let xobj = self.get_xobj(&name);
+                let ctm = self.curr_ctm();
+                println!("implemnet do operator ({:?})", name);
+                return Message::DrawXObject(
+                    XObjectInfo {
+                        bytes: xobj.bytes.clone(),
+                        w: xobj.width,
+                        h: xobj.height,
+
+                        x: ctm.x(),
+                        y: ctm.y(),
+                        x_scale: ctm.x_scale(),
+                        y_scale: ctm.y_scale(),
+                    }
+                );
+            },
 
             // Text
             Token::Tj => {
@@ -194,6 +214,7 @@ impl ContentStreamer {
                 }
                 return self.mk_message_block(msgs);
             },
+
             _ => {},
         }
 
@@ -345,13 +366,13 @@ impl ContentStreamer {
                 let _spacing = self.pop_number();
                 println!("implement char spacing");
             },
-            Token::Do => {
-                let name = self.pop_string();
-                println!("implemnet do operator ({:?})", name);
-            }
             other => panic!("unexpected token: {:?}", other),
         };
         return Message::Noop;
+    }
+
+    fn get_xobj(&self, name: &str) -> &XObject {
+        return self.ctx.xobj_lib.id_to_obj.get(name).unwrap();
     }
 
     fn curr_ctm(&self) -> &Matrix {
@@ -492,7 +513,7 @@ use std::fs;
 
 use crate::content::tokenizer::tokenize_stream;
 use crate::fonts::FontLib;
-use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
+use crate::pdf::ast::{ColourSpace, ColourSpaceLib, XObjectLib};
 use crate::pdf::parser::parse_tokens;
 use crate::pdf::tokenizer::tokenize_pdf;
 
@@ -525,6 +546,7 @@ fn dummy_ctx() -> PageCtx {
         cs_lib: ColourSpaceLib {
             id_to_cs: HashMap::new(),
         },
+        xobj_lib: XObjectLib::new(),
     };
 }
 

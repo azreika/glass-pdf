@@ -12,8 +12,8 @@ use crate::content::graphics::{ClippingRule, PathOp};
 use crate::content::streamer::ContentStreamer;
 use crate::content::tokenizer::Token;
 use crate::fonts::{Font, FontLib};
-use crate::pdf::ast::{ColourSpace, ColourSpaceLib};
-use crate::viewer_message::{Color, GlyphInfo, Message, PathInfo};
+use crate::pdf::ast::{ColourSpace, ColourSpaceLib, XObjectLib};
+use crate::viewer_message::{Color, GlyphInfo, Message, PathInfo, XObjectInfo};
 
 #[derive(Clone, Debug)]
 pub struct PageCtx {
@@ -21,6 +21,7 @@ pub struct PageCtx {
     pub width: f64,
     pub font_lib: FontLib,
     pub cs_lib: ColourSpaceLib,
+    pub xobj_lib: XObjectLib,
 }
 
 impl PageCtx {
@@ -48,6 +49,7 @@ struct App {
     ctx: PageCtx,
     shapes: Vec<PathInfo>,
     glyphs: Vec<GlyphInfo>,
+    xobjs: Vec<XObjectInfo>,
 
     zoom_scale: f32,
     cached_scale_factor: f32,
@@ -63,11 +65,13 @@ impl App {
 
         let mut shapes = vec![];
         let mut glyphs = vec![];
+        let mut xobjs = vec![];
 
         for msg in messages.into_iter() {
             match msg {
                 Message::DrawGlyph(info) => glyphs.push(info),
                 Message::DrawPath(info) => shapes.push(info),
+                Message::DrawXObject(info) => xobjs.push(info),
                 Message::DrawBlock(_) => panic!("unexpected draw block in messages"),
                 Message::Noop => panic!("unexpected noop in messages"),
             }
@@ -79,6 +83,7 @@ impl App {
             ctx: ctx.clone(),
             shapes,
             glyphs,
+            xobjs,
             zoom_scale: 1.0,
 
             out_pixmap: None,
@@ -179,6 +184,36 @@ impl App {
         return pixmap;
     }
 
+    fn draw_xobjs(&self, pixmap: &mut Pixmap) {
+        let sf = self.cached_scale_factor as f64;
+
+        for info in &self.xobjs {
+            let data = &info.bytes;
+            let mut img_pixmap = Pixmap::new(info.w, info.h).unwrap();
+
+            for (dst, src) in img_pixmap.pixels_mut().iter_mut().zip(data.chunks_exact(3)) {
+                let a = 1.0;
+                // premultiply once, here, when writing into the Pixmap
+                *dst = tiny_skia::PremultipliedColorU8::from_rgba(
+                    (src[0] as f32 * a) as u8,
+                    (src[1] as f32 * a) as u8,
+                    (src[2] as f32 * a) as u8,
+                    255u8,
+                )
+                .unwrap();
+            }
+
+            pixmap.draw_pixmap(
+                info.x as i32,
+                info.y as i32,
+                img_pixmap.as_ref(),
+                &tiny_skia::PixmapPaint::default(),
+                tiny_skia::Transform::identity(),
+                None,
+            );
+        }
+    }
+
     fn draw_glyphs(&self, pixmap: &mut Pixmap) {
         for glyph in &self.rasterized_glyphs {
             let mut glyph_pixmap = tiny_skia::Pixmap::new(glyph.w as u32, glyph.h as u32).unwrap();
@@ -215,6 +250,7 @@ impl App {
         let mut pixmap = self.init_pixmap(bg_color);
         self.draw_shapes(&mut pixmap);
         self.draw_glyphs(&mut pixmap);
+        self.draw_xobjs(&mut pixmap);
         return pixmap;
     }
 

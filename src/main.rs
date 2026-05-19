@@ -18,7 +18,7 @@ use std::env;
 
 use crate::content::pretty::PrettyPrinter;
 use crate::fonts::FontLib;
-use crate::pdf::ast::{ColourSpaceLib, Pdf, Value};
+use crate::pdf::ast::{ColourSpaceLib, Pdf, Value, XObjectLib};
 use crate::pdf::parse_pdf;
 use crate::viewer::PageCtx;
 
@@ -84,6 +84,7 @@ fn view_pdf(filename: String) {
     let pages = get_pages(&ast);
     assert!(pages.len() >= 1);
     let page = ast.get_object(&pages[0]);
+
     let contents = page.get("Contents").deref(&ast);
     let ctx = ast.mk_page_ctx(page);
 
@@ -101,6 +102,7 @@ fn view_content_stream(filename: String) {
         height: 500.0,
         font_lib: FontLib { id_to_font: HashMap::new() },
         cs_lib: ColourSpaceLib { id_to_cs: HashMap::new() },
+        xobj_lib: XObjectLib::new(),
     };
     let tokenized_contents = tokenize_stream(content_bytes);
     view_contents(&ctx, &tokenized_contents);

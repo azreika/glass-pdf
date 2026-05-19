@@ -23,6 +23,29 @@ impl fmt::Display for SrcLoc {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct XObject {
+    pub width: u32,
+    pub height: u32,
+    pub bytes: Vec<u8>,
+}
+
+
+#[derive(Debug, Clone)]
+pub struct XObjectLib {
+    pub id_to_obj: HashMap<String,XObject>,
+}
+
+impl XObjectLib {
+    pub fn new() -> Self {
+        return XObjectLib { id_to_obj: HashMap::new(), };
+    }
+
+    pub fn insert(&mut self, id: String, xobj: XObject) {
+        self.id_to_obj.insert(id, xobj);
+    }
+}
+
 #[derive(Debug,Clone)]
 pub struct ColourSpace {
     pub num_components: u8,
@@ -283,6 +306,40 @@ impl Pdf {
         };
     }
 
+    pub fn process_xobjs(&self, xobjs: &Value) -> XObjectLib {
+        let mut lib = XObjectLib::new();
+
+        assert!(matches!(xobjs, Value::Dict(_)));
+        for (id, vref) in xobjs.get_dict() {
+            assert!(matches!(vref, Value::Reference { .. }));
+            let v = vref.deref(&self);
+            assert!(matches!(v, Value::ByteStream(_, _)));
+            let metadata = v.metadata();
+            println!("XOBJ: {id} {:?}", metadata);
+
+            let subtype = metadata.get("Subtype").unwrap().get_string();
+            assert_eq!(subtype, "Image");
+
+            let filter_type = metadata.get("Filter").unwrap().get_string();
+            assert_eq!(filter_type, "FlateDecode");
+
+            let width = metadata.get("Width").unwrap().to_num() as u32;
+            let height = metadata.get("Height").unwrap().to_num() as u32;
+
+            let cs = metadata.get("ColorSpace").unwrap().get_string();
+            assert_eq!(cs, "DeviceRGB");
+
+            let xobj = XObject {
+                width,
+                height,
+                bytes: v.decode(),
+            };
+            lib.insert(id.to_string(), xobj);
+        }
+
+        return lib;
+    }
+
     pub fn mk_page_ctx(&self, page: &Value) -> PageCtx {
         let resource_ref = page.get("Resources");
         let resources = match resource_ref {
@@ -300,6 +357,13 @@ impl Pdf {
             ColourSpaceLib { id_to_cs: HashMap::new() }
         };
 
+        let maybe_xobjs = resources.try_get("XObject");
+        let xobj_lib = if let Some(xobjs) = maybe_xobjs {
+            self.process_xobjs(xobjs)
+        } else {
+            XObjectLib::new()
+        };
+
         let media_box = page.get("MediaBox").to_vec_f32();
         assert_eq!(media_box.len(), 4);
         assert_eq!(media_box[0], 0.0);
@@ -312,6 +376,7 @@ impl Pdf {
             width: page_width,
             font_lib: font_lib,
             cs_lib: cs_lib,
+            xobj_lib: xobj_lib,
         };
     }
 }
