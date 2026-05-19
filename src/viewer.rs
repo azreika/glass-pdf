@@ -43,6 +43,13 @@ pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
     event_loop.run_app(&mut App::new(page_ctx, tokens)).unwrap();
 }
 
+struct PanInfo {
+    pan_x: f32,
+    pan_y: f32,
+    is_panning: bool,
+    last_cursor: Option<(f32, f32)>,
+}
+
 struct App {
     window: Option<Arc<Window>>,
     surface: Option<Surface<Arc<Window>, Arc<Window>>>,
@@ -52,6 +59,8 @@ struct App {
     xobjs: Vec<XObjectInfo>,
 
     zoom_scale: f32,
+    panning: PanInfo,
+
     cached_scale_factor: f32,
     rasterized_glyphs: Vec<RasterGlyphPix>,
 
@@ -117,6 +126,7 @@ impl App {
             glyphs,
             xobjs,
             zoom_scale: 1.0,
+            panning: PanInfo { pan_x: 0.0, pan_y: 0.0, is_panning: false, last_cursor: None },
 
             out_pixmap: None,
             base_pixmap: None,
@@ -134,7 +144,11 @@ impl App {
             0, 0,
             base.as_ref(),
             &tiny_skia::PixmapPaint::default(),
-            tiny_skia::Transform::from_scale(self.zoom_scale, self.zoom_scale),
+            tiny_skia::Transform::from_row(
+                self.zoom_scale, 0.0,
+                0.0, self.zoom_scale,
+                self.panning.pan_x, self.panning.pan_y,
+            ),
             None,
         );
     }
@@ -346,6 +360,25 @@ impl ApplicationHandler for App {
                     self.zoom_scale = self.zoom_scale.clamp(0.1, 10.0);
                     self.redraw();
                 }
+            },
+
+            WindowEvent::MouseInput { state, button: winit::event::MouseButton::Left, .. } => {
+                self.panning.is_panning = state == winit::event::ElementState::Pressed;
+                if !self.panning.is_panning {
+                    self.panning.last_cursor = None;
+                }
+            },
+
+            WindowEvent::CursorMoved { position, .. } => {
+                let pos = (position.x as f32, position.y as f32);
+                if self.panning.is_panning {
+                    if let Some((last_x, last_y)) = self.panning.last_cursor {
+                        self.panning.pan_x += pos.0 - last_x;
+                        self.panning.pan_y += pos.1 - last_y;
+                        self.redraw();
+                    }
+                }
+                self.panning.last_cursor = Some(pos);
             },
             _ => {}
         }
