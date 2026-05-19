@@ -77,10 +77,18 @@ fn pixmap_color(src: &[u8]) -> PremultipliedColorU8 {
     ).unwrap();
 }
 
-fn draw_color_pixels(pixmap: &mut Pixmap, data: &Vec<u8>, chunksize: usize) {
-    for (dst, src) in pixmap.pixels_mut().iter_mut().zip(data.chunks_exact(chunksize)) {
+fn draw_pixels(pixmap: &mut Pixmap, data: &Vec<u8>, w: u32, h: u32, x: f64, y: f64, chunksize: usize, t: Transform) {
+    let mut inner_pixmap = tiny_skia::Pixmap::new(w, h).unwrap();
+    for (dst, src) in inner_pixmap.pixels_mut().iter_mut().zip(data.chunks_exact(chunksize)) {
         *dst = pixmap_color(&src);
     }
+     pixmap.draw_pixmap(
+        x as i32, y as i32,
+        inner_pixmap.as_ref(),
+        &tiny_skia::PixmapPaint::default(),
+        t,
+        None,
+    );
 }
 
 impl App {
@@ -209,33 +217,42 @@ impl App {
     }
 
     fn draw_xobjs(&self, pixmap: &mut Pixmap) {
+        let sf = self.cached_scale_factor as f64;
         for info in &self.xobjs {
-            let mut img_pixmap = Pixmap::new(info.w, info.h).unwrap();
-            draw_color_pixels(&mut img_pixmap, &info.bytes, 3);
+            let x = info.x * sf;
 
-            pixmap.draw_pixmap(
-                info.x as i32,
-                info.y as i32,
-                img_pixmap.as_ref(),
-                &tiny_skia::PixmapPaint::default(),
-                tiny_skia::Transform::identity(),
-                None,
+            let y = (self.ctx.height - info.y - info.y_scale as f64) * sf;
+
+            let x_scale = (info.x_scale as f64 * sf) as f32 / info.w as f32;
+            let y_scale = (info.y_scale as f64 * sf) as f32 / info.h as f32;
+
+            let transform = Transform::from_row(
+                x_scale,
+                0.0, 0.0,
+                y_scale,
+                x as f32,
+                y as f32);
+
+            draw_pixels(
+                pixmap,
+                &info.bytes,
+                info.w, info.h,
+                0.0, 0.0,
+                3,
+                transform,
             );
         }
     }
 
     fn draw_glyphs(&self, pixmap: &mut Pixmap) {
         for glyph in &self.rasterized_glyphs {
-            let mut glyph_pixmap = tiny_skia::Pixmap::new(glyph.w as u32, glyph.h as u32).unwrap();
-            draw_color_pixels(&mut glyph_pixmap, &glyph.rgba, 4);
-
-            pixmap.draw_pixmap(
-                glyph.x as i32,
-                glyph.y as i32,
-                glyph_pixmap.as_ref(),
-                &tiny_skia::PixmapPaint::default(),
+            draw_pixels(
+                pixmap,
+                &glyph.rgba,
+                glyph.w as u32, glyph.h as u32,
+                glyph.x, glyph.y,
+                4,
                 tiny_skia::Transform::identity(),
-                None,
             );
         }
     }

@@ -174,17 +174,19 @@ impl ContentStreamer {
                 let name = self.pop_string();
                 let xobj = self.get_xobj(&name);
                 let ctm = self.curr_ctm();
-                println!("implemnet do operator ({:?})", name);
+
+                let screen_x = ctm.x();
+                let screen_y = ctm.y();
+
                 return Message::DrawXObject(
                     XObjectInfo {
                         bytes: xobj.bytes.clone(),
                         w: xobj.width,
                         h: xobj.height,
-
-                        x: ctm.x(),
-                        y: ctm.y(),
                         x_scale: ctm.x_scale(),
                         y_scale: ctm.y_scale(),
+                        x: screen_x,
+                        y: screen_y,
                     }
                 );
             },
