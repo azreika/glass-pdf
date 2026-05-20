@@ -8,13 +8,17 @@ use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::window::Window;
+use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::window::WindowId;
 
 use crate::content::graphics::{ClippingRule, PathOp};
 use crate::content::streamer::ContentStreamer;
 use crate::content::tokenizer::Token;
 use crate::fonts::{Font, FontLib};
 use crate::pdf::ast::{ColourSpace, ColourSpaceLib, XObjectLib};
+use crate::view_info::ViewInfo;
 use crate::viewer_message::{Color, GlyphInfo, Message, PathInfo, XObjectInfo};
+
 
 #[derive(Clone, Debug)]
 pub struct PageCtx {
@@ -36,63 +40,10 @@ impl PageCtx {
         self.font_lib.id_to_font.insert(font.id.to_string(), font);
     }
 }
-use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::window::WindowId;
 
 pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
     let event_loop = EventLoop::new().unwrap();
     event_loop.run_app(&mut App::new(page_ctx, tokens)).unwrap();
-}
-
-struct ViewInfo {
-    pan_x: f32,
-    pan_y: f32,
-    zoom_scale: f32,
-    is_panning: bool,
-    last_cursor: Option<(f32, f32)>,
-}
-
-impl ViewInfo {
-    fn new() -> Self {
-        return ViewInfo {
-            pan_x: 0.0,
-            pan_y: 0.0,
-            zoom_scale: 1.0,
-            is_panning: false,
-            last_cursor: None,
-        };
-    }
-
-    fn zoom_in(&mut self, y: f32) {
-        let old_zoom = self.zoom_scale;
-        self.zoom_scale *= 1.0 + y * 0.02;
-        self.zoom_scale = self.zoom_scale.clamp(0.1, 10.0);
-
-        let new_zoom = self.zoom_scale;
-
-        if let Some((cx, cy)) = self.last_cursor {
-            let ratio = new_zoom / old_zoom;
-            self.pan_x = cx - (cx - self.pan_x) * ratio;
-            self.pan_y = cy - (cy - self.pan_y) * ratio;
-        }
-    }
-
-    fn toggle_panning(&mut self, v: bool) {
-        self.is_panning = v;
-        if !v {
-            self.last_cursor = None;
-        };
-    }
-
-    fn move_cursor(&mut self, x: f32, y: f32) {
-        if self.is_panning {
-            if let Some((last_x, last_y)) = self.last_cursor {
-                self.pan_x += x - last_x;
-                self.pan_y += y - last_y;
-            }
-        }
-        self.last_cursor = Some((x, y));
-    }
 }
 
 struct WindowState {
@@ -117,6 +68,7 @@ impl WindowState {
         let surface = Surface::new(&context, window.clone()).unwrap();
         return WindowState { window, surface };
     }
+
     fn size(&self) -> (u32, u32) {
         let sz = self.window.inner_size();
         return (sz.width, sz.height);
@@ -132,12 +84,11 @@ impl WindowState {
 }
 
 struct App {
-    window: Option<WindowState>,
-
     ctx: PageCtx,
     view: ViewInfo,
     objects: ObjectInfo,
 
+    window: Option<WindowState>,
     base_pixmap: Option<Pixmap>,
 }
 
@@ -451,16 +402,6 @@ impl From<&Color> for SkiaColor {
             Color::RGBA(r,g,b,a) => SkiaColor::from_rgba(r, g, b, a).unwrap(),
             Color::Gray(g) => SkiaColor::from_rgba(g, g, g, 1.0).unwrap(),
         }
-    }
-}
-
-impl From<&ViewInfo> for tiny_skia::Transform {
-    fn from(view: &ViewInfo) -> tiny_skia::Transform {
-        return tiny_skia::Transform::from_row(
-            view.zoom_scale, 0.0,
-            0.0, view.zoom_scale,
-            view.pan_x, view.pan_y,
-        );
     }
 }
 

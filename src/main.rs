@@ -10,6 +10,7 @@ mod viewer_message;
 mod fonts;
 mod test_consts;
 mod transform;
+mod view_info;
 
 use content::tokenizer::{tokenize_stream};
 use viewer::view_contents;
