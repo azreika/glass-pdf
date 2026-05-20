@@ -5,7 +5,8 @@ use softbuffer::{Context, Surface};
 use tiny_skia::{FillRule, Mask, Pixmap, PixmapPaint, PremultipliedColorU8, Transform};
 use tiny_skia::{Color as SkiaColor, Rect as SkiaRect, Path as SkiaPath};
 use winit::application::ApplicationHandler;
-use winit::event::{MouseScrollDelta, WindowEvent};
+use winit::dpi::{PhysicalPosition, PhysicalSize};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::window::Window;
 
 use crate::content::graphics::{ClippingRule, PathOp};
@@ -212,6 +213,70 @@ impl App {
         return pb.finish();
     }
 
+    fn handle_close(&self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        event_loop.exit();
+    }
+
+    fn handle_resize(&mut self, size: PhysicalSize<u32>) {
+        if size.width > 0 && size.height > 0 {
+            self.out_pixmap = Some(Pixmap::new(size.width, size.height).unwrap());
+            self.redraw();
+        }
+    }
+
+    fn handle_cursor(&mut self, position: PhysicalPosition<f64>) {
+        self.view.move_cursor(position.x as f32, position.y as f32);
+        if self.view.is_panning {
+            self.redraw();
+        }
+    }
+
+    fn handle_sf_change(&mut self, sf: f64) {
+        self.cached_scale_factor = sf;
+        self.base_dirty = true;
+    }
+
+    fn handle_click(&mut self, state: ElementState, button: MouseButton) {
+        match button {
+            MouseButton::Left => {
+                self.view.toggle_panning(state == winit::event::ElementState::Pressed);
+            },
+            _ => {},
+        }
+    }
+
+    fn handle_scroll(&mut self, delta: MouseScrollDelta) {
+        let y = match delta {
+            MouseScrollDelta::LineDelta(y, .. ) => y,
+            MouseScrollDelta::PixelDelta(y, ..) => y.y as f32,
+        };
+        if y == 0.0 { return; }
+        self.view.zoom_in(y);
+        self.redraw();
+    }
+
+    fn handle_redraw(&mut self) {
+        if self.base_dirty {
+            self.base_pixmap = Some(self.mk_base_pixmap());
+            self.base_dirty = false;
+        }
+
+        assert_eq!(self.window.as_ref().unwrap().scale_factor(), self.cached_scale_factor);
+        self.draw_to_pixmap();
+        let (w, h) = self.window_size();
+        let pixmap = self.out_pixmap.as_ref().unwrap();
+        let surface = self.surface.as_mut().unwrap();
+        surface.resize(
+                NonZeroU32::new(w).unwrap(),
+                NonZeroU32::new(h).unwrap(),
+            ).unwrap();
+        let mut buf = surface.buffer_mut().unwrap();
+        for (pixel, src) in buf.iter_mut().zip(pixmap.data().chunks_exact(4)) {
+            *pixel = ((src[0] as u32) << 16) | ((src[1] as u32) << 8) | src[2] as u32;
+        }
+        buf.present().unwrap();
+    }
+
     fn phys_w(&self) -> u32 {
         let sf = self.cached_scale_factor;
         return (self.ctx.width * sf) as u32;
@@ -358,66 +423,17 @@ impl ApplicationHandler for App {
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
-        _window_id: WindowId,
+        _: WindowId,
         event: winit::event::WindowEvent,
     ) {
         match event {
-            WindowEvent::RedrawRequested => {
-                if self.base_dirty {
-                    self.base_pixmap = Some(self.mk_base_pixmap());
-                    self.base_dirty = false;
-                }
-
-                assert_eq!(self.window.as_ref().unwrap().scale_factor(), self.cached_scale_factor);
-                self.draw_to_pixmap();
-                let (w, h) = self.window_size();
-                let pixmap = self.out_pixmap.as_ref().unwrap();
-                let surface = self.surface.as_mut().unwrap();
-                surface.resize(
-                        NonZeroU32::new(w).unwrap(),
-                        NonZeroU32::new(h).unwrap(),
-                    ).unwrap();
-                let mut buf = surface.buffer_mut().unwrap();
-                for (pixel, src) in buf.iter_mut().zip(pixmap.data().chunks_exact(4)) {
-                    *pixel = ((src[0] as u32) << 16) | ((src[1] as u32) << 8) | src[2] as u32;
-                }
-                buf.present().unwrap();
-            }
-
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => {
-                if size.width > 0 && size.height > 0 {
-                    self.out_pixmap = Some(Pixmap::new(size.width, size.height).unwrap());
-                    self.redraw();
-                }
-            },
-
-            WindowEvent::MouseWheel { device_id: _, delta, phase: _ } => {
-                let y = match delta {
-                    MouseScrollDelta::LineDelta(y, .. ) => y,
-                    MouseScrollDelta::PixelDelta(y, ..) => y.y as f32,
-                };
-                if y == 0.0 { return; }
-                self.view.zoom_in(y);
-                self.redraw();
-            },
-
-            WindowEvent::MouseInput { state, button: winit::event::MouseButton::Left, .. } => {
-                self.view.toggle_panning(state == winit::event::ElementState::Pressed);
-            }
-
-            WindowEvent::CursorMoved { position, .. } => {
-                self.view.move_cursor(position.x as f32, position.y as f32);
-                if self.view.is_panning {
-                    self.redraw();
-                }
-            },
-
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                self.cached_scale_factor = scale_factor;
-                self.base_dirty = true;
-            },
-
+            WindowEvent::RedrawRequested => self.handle_redraw(),
+            WindowEvent::CloseRequested => self.handle_close(event_loop),
+            WindowEvent::Resized(size) => self.handle_resize(size),
+            WindowEvent::MouseWheel { delta, .. } => self.handle_scroll(delta),
+            WindowEvent::MouseInput { state, button, .. } => self.handle_click(state, button),
+            WindowEvent::CursorMoved { position, .. } => self.handle_cursor(position),
+            WindowEvent::ScaleFactorChanged { scale_factor: sf, .. } => self.handle_sf_change(sf),
             _ => {}
         }
     }
