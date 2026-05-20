@@ -36,7 +36,7 @@ impl PageCtx {
         self.font_lib.id_to_font.insert(font.id.to_string(), font);
     }
 }
-use winit::event_loop::EventLoop;
+use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::WindowId;
 
 pub fn view_contents(page_ctx: &PageCtx, tokens: &Vec<Token>) {
@@ -95,9 +95,39 @@ impl ViewInfo {
     }
 }
 
+struct WindowState {
+    window: Arc<Window>,
+    surface: Surface<Arc<Window>, Arc<Window>>,
+}
+
+impl WindowState {
+    fn new(event_loop: &ActiveEventLoop) -> Self {
+        let window = Arc::new(
+            event_loop
+                .create_window(Window::default_attributes().with_title("PDF"))
+                .unwrap(),
+        );
+        let context = Context::new(window.clone()).unwrap();
+        let surface = Surface::new(&context, window.clone()).unwrap();
+        return WindowState { window, surface };
+    }
+    fn size(&self) -> (u32, u32) {
+        let sz = self.window.inner_size();
+        return (sz.width, sz.height);
+    }
+
+    fn request_redraw(&self) {
+        return self.window.request_redraw();
+    }
+
+    fn scale_factor(&self) -> f64 {
+        return self.window.scale_factor();
+    }
+}
+
 struct App {
-    window: Option<Arc<Window>>,
-    surface: Option<Surface<Arc<Window>, Arc<Window>>>,
+    window: Option<WindowState>,
+
     ctx: PageCtx,
     shapes: Vec<PathInfo>,
     glyphs: Vec<GlyphInfo>,
@@ -105,7 +135,7 @@ struct App {
 
     view: ViewInfo,
 
-    cached_scale_factor: f64,
+    scale_factor: f64,
     rasterized_glyphs: Vec<RasterizedGlyph>,
 
     base_pixmap: Option<Pixmap>,
@@ -166,7 +196,6 @@ impl App {
 
         return App {
             window: None,
-            surface: None,
             ctx: ctx.clone(),
             shapes,
             glyphs,
@@ -175,7 +204,7 @@ impl App {
 
             out_pixmap: None,
             base_pixmap: None,
-            cached_scale_factor: 0.0,
+            scale_factor: 0.0,
             rasterized_glyphs: vec![],
 
             base_dirty: true,
@@ -232,7 +261,7 @@ impl App {
     }
 
     fn handle_sf_change(&mut self, sf: f64) {
-        self.cached_scale_factor = sf;
+        self.scale_factor = sf;
         self.base_dirty = true;
     }
 
@@ -261,16 +290,16 @@ impl App {
             self.base_dirty = false;
         }
 
-        assert_eq!(self.window.as_ref().unwrap().scale_factor(), self.cached_scale_factor);
         self.draw_to_pixmap();
         let (w, h) = self.window_size();
         let pixmap = self.out_pixmap.as_ref().unwrap();
-        let surface = self.surface.as_mut().unwrap();
-        surface.resize(
+        let window_state = self.window.as_mut().unwrap();
+        assert_eq!(window_state.window.scale_factor(), self.scale_factor);
+        window_state.surface.resize(
                 NonZeroU32::new(w).unwrap(),
                 NonZeroU32::new(h).unwrap(),
             ).unwrap();
-        let mut buf = surface.buffer_mut().unwrap();
+        let mut buf = window_state.surface.buffer_mut().unwrap();
         for (pixel, src) in buf.iter_mut().zip(pixmap.data().chunks_exact(4)) {
             *pixel = ((src[0] as u32) << 16) | ((src[1] as u32) << 8) | src[2] as u32;
         }
@@ -278,12 +307,12 @@ impl App {
     }
 
     fn phys_w(&self) -> u32 {
-        let sf = self.cached_scale_factor;
+        let sf = self.scale_factor;
         return (self.ctx.width * sf) as u32;
     }
 
     fn phys_h(&self) -> u32 {
-        let sf = self.cached_scale_factor;
+        let sf = self.scale_factor;
         return (self.ctx.height * sf) as u32;
     }
 
@@ -313,7 +342,7 @@ impl App {
     }
 
     fn sf_transform(&self) -> Transform {
-        let sf = self.cached_scale_factor;
+        let sf = self.scale_factor;
         return Transform::from_scale(sf as f32, sf as f32);
     }
 
@@ -337,7 +366,7 @@ impl App {
     }
 
     fn draw_xobjs(&self, pixmap: &mut Pixmap) {
-        let sf = self.cached_scale_factor as f64;
+        let sf = self.scale_factor as f64;
         for info in &self.xobjs {
             let x = info.x * sf;
 
@@ -390,34 +419,21 @@ impl App {
     }
 
     fn window_size(&self) -> (u32, u32) {
-        let window = self.window.as_ref().unwrap();
-        let size = window.inner_size();
-        return (size.width, size.height);
+        return self.window.as_ref().unwrap().size();
     }
 }
 
 impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let window = Arc::new(
-            event_loop
-                .create_window(Window::default_attributes().with_title("PDF"))
-                .unwrap(),
-        );
-        let context = Context::new(window.clone()).unwrap();
-        let surface = Surface::new(&context, window.clone()).unwrap();
-        let size = window.inner_size();
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window = WindowState::new(event_loop);
 
-        let scale_factor = window.scale_factor();
-        let rasterized_glyphs =
-                rasterize_glyph_pixels(&self.glyphs, scale_factor, &self.ctx);
-
-        self.cached_scale_factor = scale_factor;
+        let size = window.size();
+        let sf = window.scale_factor();
+        self.scale_factor = sf;
 
         self.window = Some(window);
-        self.surface = Some(surface);
-
-        self.rasterized_glyphs = rasterized_glyphs;
-        self.out_pixmap = Some(tiny_skia::Pixmap::new(size.width, size.height).unwrap());
+        self.rasterized_glyphs = rasterize_glyph_pixels(&self.glyphs, sf, &self.ctx);
+        self.out_pixmap = Some(tiny_skia::Pixmap::new(size.0, size.1).unwrap());
     }
 
     fn window_event(
