@@ -139,7 +139,6 @@ struct App {
     objects: ObjectInfo,
 
     base_pixmap: Option<Pixmap>,
-    base_dirty: bool,
 }
 
 fn pixmap_color(src: &[u8]) -> PremultipliedColorU8 {
@@ -202,10 +201,7 @@ impl App {
             ctx: ctx.clone(),
             objects,
             view: ViewInfo::new(),
-
             base_pixmap: None,
-
-            base_dirty: true,
         }
     }
 
@@ -268,7 +264,11 @@ impl App {
     }
 
     fn handle_sf_change(&mut self, _: f64) {
-        self.base_dirty = true;
+        self.revalidate_base();
+    }
+
+    fn revalidate_base(&mut self) {
+        self.base_pixmap = Some(self.mk_base_pixmap());
     }
 
     fn handle_click(&mut self, state: ElementState, button: MouseButton) {
@@ -291,8 +291,6 @@ impl App {
     }
 
     fn handle_redraw(&mut self) {
-        if self.base_dirty { self.revalidate_base(); }
-
         let pixmap = self.draw_to_pixmap();
         let window_state = self.window.as_mut().unwrap();
         let mut buf = window_state.surface.buffer_mut().unwrap();
@@ -407,11 +405,6 @@ impl App {
         }
     }
 
-    fn revalidate_base(&mut self) {
-        self.base_pixmap = Some(self.mk_base_pixmap());
-        self.base_dirty = false;
-    }
-
     fn mk_base_pixmap(&self) -> Pixmap {
         let mut pixmap = self.init_pixmap();
         self.draw_shapes(&mut pixmap);
@@ -428,6 +421,7 @@ impl App {
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.window = Some(WindowState::new(event_loop));
+        self.revalidate_base();
     }
 
     fn window_event(
