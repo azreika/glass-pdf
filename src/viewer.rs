@@ -100,6 +100,16 @@ struct WindowState {
     surface: Surface<Arc<Window>, Arc<Window>>,
 }
 
+struct BaseView {
+    pixmap: Pixmap,
+}
+
+struct ObjectInfo {
+    shapes: Vec<PathInfo>,
+    glyphs: Vec<GlyphInfo>,
+    xobjs: Vec<XObjectInfo>,
+}
+
 impl WindowState {
     fn new(event_loop: &ActiveEventLoop) -> Self {
         let window = Arc::new(
@@ -129,16 +139,13 @@ struct App {
     window: Option<WindowState>,
 
     ctx: PageCtx,
-    shapes: Vec<PathInfo>,
-    glyphs: Vec<GlyphInfo>,
-    xobjs: Vec<XObjectInfo>,
-
     view: ViewInfo,
+    objects: ObjectInfo,
 
     scale_factor: f64,
     rasterized_glyphs: Vec<RasterizedGlyph>,
 
-    base_pixmap: Option<Pixmap>,
+    base_pixmap: Option<BaseView>,
     out_pixmap: Option<Pixmap>,
 
     base_dirty: bool,
@@ -176,30 +183,33 @@ fn draw_pixels(pixmap: &mut Pixmap, view_box: ViewBox, data: &Vec<u8>, chunksize
     );
 }
 
+fn process_messages(messages: Vec<Message>) -> ObjectInfo {
+    let mut shapes = vec![];
+    let mut glyphs = vec![];
+    let mut xobjs = vec![];
+
+    for msg in messages.into_iter() {
+        match msg {
+            Message::DrawGlyph(info) => glyphs.push(info),
+            Message::DrawPath(info) => shapes.push(info),
+            Message::DrawXObject(info) => xobjs.push(info),
+            Message::DrawBlock(_) => panic!("unexpected draw block in messages"),
+            Message::Noop => panic!("unexpected noop in messages"),
+        }
+    }
+
+    return ObjectInfo { shapes, glyphs, xobjs };
+}
+
 impl App {
     fn new(ctx: &PageCtx, toks: &Vec<Token>) -> Self {
         let messages = ContentStreamer::process_stream(ctx, toks);
-
-        let mut shapes = vec![];
-        let mut glyphs = vec![];
-        let mut xobjs = vec![];
-
-        for msg in messages.into_iter() {
-            match msg {
-                Message::DrawGlyph(info) => glyphs.push(info),
-                Message::DrawPath(info) => shapes.push(info),
-                Message::DrawXObject(info) => xobjs.push(info),
-                Message::DrawBlock(_) => panic!("unexpected draw block in messages"),
-                Message::Noop => panic!("unexpected noop in messages"),
-            }
-        }
+        let objects = process_messages(messages);
 
         return App {
             window: None,
             ctx: ctx.clone(),
-            shapes,
-            glyphs,
-            xobjs,
+            objects,
             view: ViewInfo::new(),
 
             out_pixmap: None,
@@ -218,7 +228,7 @@ impl App {
         output.fill(SkiaColor::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
         output.draw_pixmap(
             0, 0,
-            base.as_ref(),
+            base.pixmap.as_ref(),
             &PixmapPaint::default(),
             Transform::from(&self.view),
             None,
@@ -285,10 +295,7 @@ impl App {
     }
 
     fn handle_redraw(&mut self) {
-        if self.base_dirty {
-            self.base_pixmap = Some(self.mk_base_pixmap());
-            self.base_dirty = false;
-        }
+        if self.base_dirty { self.revalidate_base(); }
 
         self.draw_to_pixmap();
         let (w, h) = self.window_size();
@@ -347,7 +354,7 @@ impl App {
     }
 
     fn draw_shapes(&self, pixmap: &mut Pixmap) {
-        for info in &self.shapes {
+        for info in &self.objects.shapes {
             let mask = self.mk_mask(&info.clips);
             let col = SkiaColor::from(&info.colour);
             self.fill_path(pixmap, &info.path, col, info.rule, Some(&mask));
@@ -367,7 +374,7 @@ impl App {
 
     fn draw_xobjs(&self, pixmap: &mut Pixmap) {
         let sf = self.scale_factor as f64;
-        for info in &self.xobjs {
+        for info in &self.objects.xobjs {
             let x = info.x * sf;
 
             let y = (self.ctx.height - info.y - info.y_scale as f64) * sf;
@@ -406,12 +413,20 @@ impl App {
         }
     }
 
-    fn mk_base_pixmap(&self) -> Pixmap {
+    fn revalidate_base(&mut self) {
+        self.rasterized_glyphs = rasterize_glyph_pixels(&self.objects.glyphs, self.scale_factor, &self.ctx);
+        self.base_pixmap = Some(self.mk_base_pixmap());
+        self.base_dirty = false;
+    }
+
+    fn mk_base_pixmap(&self) -> BaseView {
         let mut pixmap = self.init_pixmap();
         self.draw_shapes(&mut pixmap);
         self.draw_glyphs(&mut pixmap);
         self.draw_xobjs(&mut pixmap);
-        return pixmap;
+        return BaseView {
+            pixmap,
+        }
     }
 
     fn redraw(&self) {
@@ -432,7 +447,6 @@ impl ApplicationHandler for App {
         self.scale_factor = sf;
 
         self.window = Some(window);
-        self.rasterized_glyphs = rasterize_glyph_pixels(&self.glyphs, sf, &self.ctx);
         self.out_pixmap = Some(tiny_skia::Pixmap::new(size.0, size.1).unwrap());
     }
 
