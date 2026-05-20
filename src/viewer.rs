@@ -2,8 +2,10 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use softbuffer::{Context, Surface};
-use tiny_skia::{FillRule, Mask, Path, Pixmap, PremultipliedColorU8, Transform};
+use tiny_skia::{FillRule, Mask, Pixmap, PixmapPaint, PremultipliedColorU8, Transform};
 use tiny_skia::Color as SkiaColor;
+use tiny_skia::Rect as SkiaRect;
+use tiny_skia::Path as SkiaPath;
 use winit::application::ApplicationHandler;
 use winit::event::{MouseScrollDelta, WindowEvent};
 use winit::window::Window;
@@ -105,10 +107,10 @@ struct App {
     view: ViewInfo,
 
     cached_scale_factor: f32,
-    rasterized_glyphs: Vec<RasterGlyphPix>,
+    rasterized_glyphs: Vec<RasterizedGlyph>,
 
-    base_pixmap: Option<tiny_skia::Pixmap>,
-    out_pixmap: Option<tiny_skia::Pixmap>,
+    base_pixmap: Option<Pixmap>,
+    out_pixmap: Option<Pixmap>,
 }
 
 fn pixmap_color(src: &[u8]) -> PremultipliedColorU8 {
@@ -121,7 +123,7 @@ fn pixmap_color(src: &[u8]) -> PremultipliedColorU8 {
 
     let a = alpha as f32 / 255.0;
 
-    return tiny_skia::PremultipliedColorU8::from_rgba(
+    return PremultipliedColorU8::from_rgba(
         (src[0] as f32 * a) as u8,
         (src[1] as f32 * a) as u8,
         (src[2] as f32 * a) as u8,
@@ -129,15 +131,15 @@ fn pixmap_color(src: &[u8]) -> PremultipliedColorU8 {
     ).unwrap();
 }
 
-fn draw_pixels(pixmap: &mut Pixmap, data: &Vec<u8>, w: u32, h: u32, x: f64, y: f64, chunksize: usize, t: Transform) {
-    let mut inner_pixmap = tiny_skia::Pixmap::new(w, h).unwrap();
+fn draw_pixels(pixmap: &mut Pixmap, view_box: ViewBox, data: &Vec<u8>, chunksize: usize, t: Transform) {
+    let mut inner_pixmap = Pixmap::new(view_box.w, view_box.h).unwrap();
     for (dst, src) in inner_pixmap.pixels_mut().iter_mut().zip(data.chunks_exact(chunksize)) {
         *dst = pixmap_color(&src);
     }
      pixmap.draw_pixmap(
-        x as i32, y as i32,
+        view_box.x as i32, view_box.y as i32,
         inner_pixmap.as_ref(),
-        &tiny_skia::PixmapPaint::default(),
+        &PixmapPaint::default(),
         t,
         None,
     );
@@ -185,13 +187,13 @@ impl App {
         output.draw_pixmap(
             0, 0,
             base.as_ref(),
-            &tiny_skia::PixmapPaint::default(),
-            tiny_skia::Transform::from(&self.view),
+            &PixmapPaint::default(),
+            Transform::from(&self.view),
             None,
         );
     }
 
-    fn to_skia_path(&self, path: &Vec<PathOp>) -> Option<Path> {
+    fn to_skia_path(&self, path: &Vec<PathOp>) -> Option<SkiaPath> {
         let mut pb = tiny_skia::PathBuilder::new();
         for piece in path {
             match piece {
@@ -200,7 +202,7 @@ impl App {
                 PathOp::Close => pb.close(),
                 PathOp::Rect { x, y, w, h } => {
                     pb.push_rect(
-                        tiny_skia::Rect::from_xywh(*x as f32, *y as f32, *w as f32, *h as f32).unwrap()
+                        SkiaRect::from_xywh(*x as f32, *y as f32, *w as f32, *h as f32).unwrap()
                     );
                 }
             }
@@ -285,12 +287,10 @@ impl App {
                 x as f32,
                 y as f32);
 
+            let view_box = ViewBox::new(0.0, 0.0, info.w, info.h);
             draw_pixels(
-                pixmap,
-                &info.bytes,
-                info.w, info.h,
-                0.0, 0.0,
-                3,
+                pixmap, view_box,
+                &info.bytes, 3,
                 transform,
             );
         }
@@ -298,12 +298,14 @@ impl App {
 
     fn draw_glyphs(&self, pixmap: &mut Pixmap) {
         for glyph in &self.rasterized_glyphs {
-            draw_pixels(
-                pixmap,
-                &glyph.rgba,
-                glyph.w as u32, glyph.h as u32,
+            let view_box = ViewBox::new(
                 glyph.x, glyph.y,
-                4,
+                glyph.w as u32, glyph.h as u32,
+            );
+
+            draw_pixels(
+                pixmap, view_box,
+                &glyph.rgba, 4,
                 tiny_skia::Transform::identity(),
             );
         }
@@ -450,7 +452,7 @@ impl From<ClippingRule> for FillRule {
     }
 }
 
-struct RasterGlyphPix {
+struct RasterizedGlyph {
     rgba: Vec<u8>,
     x: f64,
     y: f64,
@@ -458,11 +460,30 @@ struct RasterGlyphPix {
     h: f64,
 }
 
+#[derive(Copy, Clone, Debug)]
+struct ViewBox {
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+}
+
+impl ViewBox {
+    fn new(x: f64, y: f64, w: u32, h: u32) -> Self {
+        return ViewBox {
+            x: x as i32,
+            y: y as i32,
+            w,
+            h,
+        };
+    }
+}
+
 fn rasterize_glyph_pixels(
     glyphs: &Vec<GlyphInfo>,
     scale_factor: f64,
     ctx: &PageCtx,
-) -> Vec<RasterGlyphPix> {
+) -> Vec<RasterizedGlyph> {
     let mut vv = vec![];
     for info in glyphs.iter() {
         let font = ctx.font_lib.get_font(&info.font_id);
@@ -487,7 +508,7 @@ fn rasterize_glyph_pixels(
         let mut y = ctx.height - info.y;
         y -= (metrics.height as i32 + metrics.ymin) as f64 / scale_factor;
 
-        vv.push(RasterGlyphPix {
+        vv.push(RasterizedGlyph {
             rgba,
             x: x * scale_factor,
             y: y * scale_factor,
