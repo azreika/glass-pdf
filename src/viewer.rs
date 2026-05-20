@@ -100,10 +100,6 @@ struct WindowState {
     surface: Surface<Arc<Window>, Arc<Window>>,
 }
 
-struct BaseView {
-    pixmap: Pixmap,
-}
-
 struct ObjectInfo {
     shapes: Vec<PathInfo>,
     glyphs: Vec<GlyphInfo>,
@@ -143,11 +139,8 @@ struct App {
     objects: ObjectInfo,
 
     scale_factor: f64,
-    rasterized_glyphs: Vec<RasterizedGlyph>,
 
-    base_pixmap: Option<BaseView>,
-    out_pixmap: Option<Pixmap>,
-
+    base_pixmap: Option<Pixmap>,
     base_dirty: bool,
 }
 
@@ -212,27 +205,26 @@ impl App {
             objects,
             view: ViewInfo::new(),
 
-            out_pixmap: None,
             base_pixmap: None,
             scale_factor: 0.0,
-            rasterized_glyphs: vec![],
 
             base_dirty: true,
         }
     }
 
-    fn draw_to_pixmap(&mut self) {
-        let output = self.out_pixmap.as_mut().unwrap();
+    fn draw_to_pixmap(&mut self) -> Pixmap {
+        let sz = self.window.as_ref().unwrap().size();
+        let mut output = Pixmap::new(sz.0, sz.1).unwrap();
         let base = self.base_pixmap.as_ref().unwrap();
-
         output.fill(SkiaColor::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
         output.draw_pixmap(
             0, 0,
-            base.pixmap.as_ref(),
+            base.as_ref(),
             &PixmapPaint::default(),
             Transform::from(&self.view),
             None,
         );
+        return output;
     }
 
     fn to_skia_path(&self, path: &Vec<PathOp>) -> Option<SkiaPath> {
@@ -258,7 +250,11 @@ impl App {
 
     fn handle_resize(&mut self, size: PhysicalSize<u32>) {
         if size.width > 0 && size.height > 0 {
-            self.out_pixmap = Some(Pixmap::new(size.width, size.height).unwrap());
+            let window_state = self.window.as_mut().unwrap();
+            window_state.surface.resize(
+                NonZeroU32::new(size.width).unwrap(),
+                NonZeroU32::new(size.height).unwrap(),
+            ).unwrap();
             self.redraw();
         }
     }
@@ -297,15 +293,8 @@ impl App {
     fn handle_redraw(&mut self) {
         if self.base_dirty { self.revalidate_base(); }
 
-        self.draw_to_pixmap();
-        let (w, h) = self.window_size();
-        let pixmap = self.out_pixmap.as_ref().unwrap();
+        let pixmap = self.draw_to_pixmap();
         let window_state = self.window.as_mut().unwrap();
-        assert_eq!(window_state.window.scale_factor(), self.scale_factor);
-        window_state.surface.resize(
-                NonZeroU32::new(w).unwrap(),
-                NonZeroU32::new(h).unwrap(),
-            ).unwrap();
         let mut buf = window_state.surface.buffer_mut().unwrap();
         for (pixel, src) in buf.iter_mut().zip(pixmap.data().chunks_exact(4)) {
             *pixel = ((src[0] as u32) << 16) | ((src[1] as u32) << 8) | src[2] as u32;
@@ -364,7 +353,7 @@ impl App {
     fn init_pixmap(&self) -> Pixmap {
         let phys_w = self.phys_w();
         let phys_h = self.phys_h();
-        let mut pixmap = tiny_skia::Pixmap::new(phys_w, phys_h).unwrap();
+        let mut pixmap = Pixmap::new(phys_w, phys_h).unwrap();
 
         let bg_color = SkiaColor::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap();
         pixmap.fill(bg_color);
@@ -399,7 +388,8 @@ impl App {
     }
 
     fn draw_glyphs(&self, pixmap: &mut Pixmap) {
-        for glyph in &self.rasterized_glyphs {
+        let rasterized_glyphs = rasterize_glyphs(&self.objects.glyphs, self.scale_factor, &self.ctx);
+        for glyph in rasterized_glyphs {
             let view_box = ViewBox::new(
                 glyph.x, glyph.y,
                 glyph.w as u32, glyph.h as u32,
@@ -414,27 +404,20 @@ impl App {
     }
 
     fn revalidate_base(&mut self) {
-        self.rasterized_glyphs = rasterize_glyph_pixels(&self.objects.glyphs, self.scale_factor, &self.ctx);
         self.base_pixmap = Some(self.mk_base_pixmap());
         self.base_dirty = false;
     }
 
-    fn mk_base_pixmap(&self) -> BaseView {
+    fn mk_base_pixmap(&self) -> Pixmap {
         let mut pixmap = self.init_pixmap();
         self.draw_shapes(&mut pixmap);
         self.draw_glyphs(&mut pixmap);
         self.draw_xobjs(&mut pixmap);
-        return BaseView {
-            pixmap,
-        }
+        return pixmap;
     }
 
     fn redraw(&self) {
         self.window.as_ref().unwrap().request_redraw();
-    }
-
-    fn window_size(&self) -> (u32, u32) {
-        return self.window.as_ref().unwrap().size();
     }
 }
 
@@ -442,12 +425,10 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = WindowState::new(event_loop);
 
-        let size = window.size();
         let sf = window.scale_factor();
         self.scale_factor = sf;
 
         self.window = Some(window);
-        self.out_pixmap = Some(tiny_skia::Pixmap::new(size.0, size.1).unwrap());
     }
 
     fn window_event(
@@ -532,7 +513,7 @@ impl ViewBox {
     }
 }
 
-fn rasterize_glyph_pixels(
+fn rasterize_glyphs(
     glyphs: &Vec<GlyphInfo>,
     scale_factor: f64,
     ctx: &PageCtx,
@@ -546,8 +527,7 @@ fn rasterize_glyph_pixels(
             continue;
         }
 
-        let (metrics, bitmap) = font
-            .ttf
+        let (metrics, bitmap) = font.ttf
             .rasterize_indexed(glyph_id, (info.size * scale_factor) as f32);
         if metrics.width == 0 || metrics.height == 0 {
             continue;
