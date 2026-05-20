@@ -3,9 +3,7 @@ use std::sync::Arc;
 
 use softbuffer::{Context, Surface};
 use tiny_skia::{FillRule, Mask, Pixmap, PixmapPaint, PremultipliedColorU8, Transform};
-use tiny_skia::Color as SkiaColor;
-use tiny_skia::Rect as SkiaRect;
-use tiny_skia::Path as SkiaPath;
+use tiny_skia::{Color as SkiaColor, Rect as SkiaRect, Path as SkiaPath};
 use winit::application::ApplicationHandler;
 use winit::event::{MouseScrollDelta, WindowEvent};
 use winit::window::Window;
@@ -106,11 +104,13 @@ struct App {
 
     view: ViewInfo,
 
-    cached_scale_factor: f32,
+    cached_scale_factor: f64,
     rasterized_glyphs: Vec<RasterizedGlyph>,
 
     base_pixmap: Option<Pixmap>,
     out_pixmap: Option<Pixmap>,
+
+    base_dirty: bool,
 }
 
 fn pixmap_color(src: &[u8]) -> PremultipliedColorU8 {
@@ -176,6 +176,8 @@ impl App {
             base_pixmap: None,
             cached_scale_factor: 0.0,
             rasterized_glyphs: vec![],
+
+            base_dirty: true,
         }
     }
 
@@ -195,14 +197,14 @@ impl App {
 
     fn to_skia_path(&self, path: &Vec<PathOp>) -> Option<SkiaPath> {
         let mut pb = tiny_skia::PathBuilder::new();
-        for piece in path {
-            match piece {
-                PathOp::MoveTo { x, y } => pb.move_to(*x as f32, *y as f32),
-                PathOp::LineTo { x, y } => pb.line_to(*x as f32, *y as f32),
+        for piece in path.iter() {
+            match *piece {
+                PathOp::MoveTo { x, y } => pb.move_to(x as f32, y as f32),
+                PathOp::LineTo { x, y } => pb.line_to(x as f32, y as f32),
                 PathOp::Close => pb.close(),
                 PathOp::Rect { x, y, w, h } => {
                     pb.push_rect(
-                        SkiaRect::from_xywh(*x as f32, *y as f32, *w as f32, *h as f32).unwrap()
+                        SkiaRect::from_xywh(x as f32, y as f32, w as f32, h as f32).unwrap()
                     );
                 }
             }
@@ -212,12 +214,12 @@ impl App {
 
     fn phys_w(&self) -> u32 {
         let sf = self.cached_scale_factor;
-        return (self.ctx.width as f32 * sf) as u32;
+        return (self.ctx.width * sf) as u32;
     }
 
     fn phys_h(&self) -> u32 {
         let sf = self.cached_scale_factor;
-        return (self.ctx.height as f32 * sf) as u32;
+        return (self.ctx.height * sf) as u32;
     }
 
     fn mk_mask(&self, clips: &Vec<(ClippingRule,Vec<PathOp>)>) -> Mask {
@@ -227,11 +229,7 @@ impl App {
         let mut mask = Mask::new(self.phys_w(), self.phys_h()).unwrap();
 
         for (rule, clip) in clips {
-            let skia_rule = match rule {
-                ClippingRule::EvenOdd => FillRule::EvenOdd,
-                ClippingRule::Winding => FillRule::Winding,
-            };
-
+            let skia_rule = FillRule::from(rule);
             let mask_path = self.to_skia_path(&clip).unwrap();
             mask.clear();
             mask.fill_path(&mask_path, skia_rule, true, self.sf_transform());
@@ -246,12 +244,12 @@ impl App {
         let mut paint = tiny_skia::Paint::default();
         paint.set_color(colour);
         let transform = self.sf_transform();
-        pixmap.fill_path(&path, &paint, FillRule::from(rule), transform, mask);
+        pixmap.fill_path(&path, &paint, FillRule::from(&rule), transform, mask);
     }
 
     fn sf_transform(&self) -> Transform {
         let sf = self.cached_scale_factor;
-        return Transform::from_scale(sf, sf);
+        return Transform::from_scale(sf as f32, sf as f32);
     }
 
     fn draw_shapes(&self, pixmap: &mut Pixmap) {
@@ -262,11 +260,14 @@ impl App {
         }
     }
 
-    fn init_pixmap(&self, color: SkiaColor) -> Pixmap {
+    fn init_pixmap(&self) -> Pixmap {
         let phys_w = self.phys_w();
         let phys_h = self.phys_h();
         let mut pixmap = tiny_skia::Pixmap::new(phys_w, phys_h).unwrap();
-        pixmap.fill(color);
+
+        let bg_color = SkiaColor::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap();
+        pixmap.fill(bg_color);
+
         return pixmap;
     }
 
@@ -306,15 +307,13 @@ impl App {
             draw_pixels(
                 pixmap, view_box,
                 &glyph.rgba, 4,
-                tiny_skia::Transform::identity(),
+                Transform::identity(),
             );
         }
     }
 
     fn mk_base_pixmap(&self) -> Pixmap {
-        let bg_color = tiny_skia::Color::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap();
-
-        let mut pixmap = self.init_pixmap(bg_color);
+        let mut pixmap = self.init_pixmap();
         self.draw_shapes(&mut pixmap);
         self.draw_glyphs(&mut pixmap);
         self.draw_xobjs(&mut pixmap);
@@ -343,9 +342,9 @@ impl ApplicationHandler for App {
         let surface = Surface::new(&context, window.clone()).unwrap();
         let size = window.inner_size();
 
-        let scale_factor = window.scale_factor() as f32;
+        let scale_factor = window.scale_factor();
         let rasterized_glyphs =
-                rasterize_glyph_pixels(&self.glyphs, scale_factor as f64, &self.ctx);
+                rasterize_glyph_pixels(&self.glyphs, scale_factor, &self.ctx);
 
         self.cached_scale_factor = scale_factor;
 
@@ -353,8 +352,6 @@ impl ApplicationHandler for App {
         self.surface = Some(surface);
 
         self.rasterized_glyphs = rasterized_glyphs;
-        self.base_pixmap = Some(self.mk_base_pixmap());
-
         self.out_pixmap = Some(tiny_skia::Pixmap::new(size.width, size.height).unwrap());
     }
 
@@ -366,7 +363,12 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                assert_eq!(self.window.as_ref().unwrap().scale_factor() as f32, self.cached_scale_factor);
+                if self.base_dirty {
+                    self.base_pixmap = Some(self.mk_base_pixmap());
+                    self.base_dirty = false;
+                }
+
+                assert_eq!(self.window.as_ref().unwrap().scale_factor(), self.cached_scale_factor);
                 self.draw_to_pixmap();
                 let (w, h) = self.window_size();
                 let pixmap = self.out_pixmap.as_ref().unwrap();
@@ -385,7 +387,7 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
                 if size.width > 0 && size.height > 0 {
-                    self.out_pixmap = Some(tiny_skia::Pixmap::new(size.width, size.height).unwrap());
+                    self.out_pixmap = Some(Pixmap::new(size.width, size.height).unwrap());
                     self.redraw();
                 }
             },
@@ -395,10 +397,9 @@ impl ApplicationHandler for App {
                     MouseScrollDelta::LineDelta(y, .. ) => y,
                     MouseScrollDelta::PixelDelta(y, ..) => y.y as f32,
                 };
-                if y != 0.0 {
-                    self.view.zoom_in(y);
-                    self.redraw();
-                }
+                if y == 0.0 { return; }
+                self.view.zoom_in(y);
+                self.redraw();
             },
 
             WindowEvent::MouseInput { state, button: winit::event::MouseButton::Left, .. } => {
@@ -411,6 +412,12 @@ impl ApplicationHandler for App {
                     self.redraw();
                 }
             },
+
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.cached_scale_factor = scale_factor;
+                self.base_dirty = true;
+            },
+
             _ => {}
         }
     }
@@ -443,8 +450,8 @@ fn alpha_bitmap_to_rgba(bitmap: &[u8], rgb8: [u8; 3]) -> Vec<u8> {
     }).collect();
 }
 
-impl From<ClippingRule> for FillRule {
-    fn from(rule: ClippingRule) -> FillRule {
+impl From<&ClippingRule> for FillRule {
+    fn from(rule: &ClippingRule) -> FillRule {
         return match rule {
             ClippingRule::Winding => FillRule::Winding,
             ClippingRule::EvenOdd => FillRule::EvenOdd,
