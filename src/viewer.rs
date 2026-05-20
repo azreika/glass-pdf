@@ -138,8 +138,6 @@ struct App {
     view: ViewInfo,
     objects: ObjectInfo,
 
-    scale_factor: f64,
-
     base_pixmap: Option<Pixmap>,
     base_dirty: bool,
 }
@@ -206,14 +204,17 @@ impl App {
             view: ViewInfo::new(),
 
             base_pixmap: None,
-            scale_factor: 0.0,
 
             base_dirty: true,
         }
     }
 
+    fn window(&self) -> &WindowState {
+        return self.window.as_ref().unwrap();
+    }
+
     fn draw_to_pixmap(&mut self) -> Pixmap {
-        let sz = self.window.as_ref().unwrap().size();
+        let sz = self.window().size();
         let mut output = Pixmap::new(sz.0, sz.1).unwrap();
         let base = self.base_pixmap.as_ref().unwrap();
         output.fill(SkiaColor::from_rgba(0.8, 0.8, 0.8, 1.0).unwrap());
@@ -266,8 +267,7 @@ impl App {
         }
     }
 
-    fn handle_sf_change(&mut self, sf: f64) {
-        self.scale_factor = sf;
+    fn handle_sf_change(&mut self, _: f64) {
         self.base_dirty = true;
     }
 
@@ -303,13 +303,17 @@ impl App {
     }
 
     fn phys_w(&self) -> u32 {
-        let sf = self.scale_factor;
+        let sf = self.scale_factor();
         return (self.ctx.width * sf) as u32;
     }
 
     fn phys_h(&self) -> u32 {
-        let sf = self.scale_factor;
+        let sf = self.scale_factor();
         return (self.ctx.height * sf) as u32;
+    }
+
+    fn scale_factor(&self) -> f64 {
+        return self.window().scale_factor();
     }
 
     fn mk_mask(&self, clips: &Vec<(ClippingRule,Vec<PathOp>)>) -> Mask {
@@ -338,7 +342,7 @@ impl App {
     }
 
     fn sf_transform(&self) -> Transform {
-        let sf = self.scale_factor;
+        let sf = self.scale_factor();
         return Transform::from_scale(sf as f32, sf as f32);
     }
 
@@ -362,7 +366,7 @@ impl App {
     }
 
     fn draw_xobjs(&self, pixmap: &mut Pixmap) {
-        let sf = self.scale_factor as f64;
+        let sf = self.scale_factor();
         for info in &self.objects.xobjs {
             let x = info.x * sf;
 
@@ -388,7 +392,7 @@ impl App {
     }
 
     fn draw_glyphs(&self, pixmap: &mut Pixmap) {
-        let rasterized_glyphs = rasterize_glyphs(&self.objects.glyphs, self.scale_factor, &self.ctx);
+        let rasterized_glyphs = rasterize_glyphs(&self.objects.glyphs, self.scale_factor(), &self.ctx);
         for glyph in rasterized_glyphs {
             let view_box = ViewBox::new(
                 glyph.x, glyph.y,
@@ -417,18 +421,13 @@ impl App {
     }
 
     fn redraw(&self) {
-        self.window.as_ref().unwrap().request_redraw();
+        self.window().request_redraw();
     }
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = WindowState::new(event_loop);
-
-        let sf = window.scale_factor();
-        self.scale_factor = sf;
-
-        self.window = Some(window);
+        self.window = Some(WindowState::new(event_loop));
     }
 
     fn window_event(
