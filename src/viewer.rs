@@ -63,8 +63,17 @@ impl ViewInfo {
     }
 
     fn zoom_in(&mut self, y: f32) {
+        let old_zoom = self.zoom_scale;
         self.zoom_scale *= 1.0 + y * 0.02;
         self.zoom_scale = self.zoom_scale.clamp(0.1, 10.0);
+
+        let new_zoom = self.zoom_scale;
+
+        if let Some((cx, cy)) = self.last_cursor {
+            let ratio = new_zoom / old_zoom;
+            self.pan_x = cx - (cx - self.pan_x) * ratio;
+            self.pan_y = cy - (cy - self.pan_y) * ratio;
+        }
     }
 
     fn toggle_panning(&mut self, v: bool) {
