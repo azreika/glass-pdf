@@ -356,7 +356,6 @@ impl App {
             let view_box = ViewBox::new(0.0, 0.0, info.w, info.h);
 
             let mut xobj_pixmap = Pixmap::new(self.phys_w(), self.phys_h()).unwrap();
-
             let mut mask_pixmap = Pixmap::new(self.phys_w(), self.phys_h()).unwrap();
             draw_pixels(&mut mask_pixmap, view_box, &smask.bytes, 1, transform);
 
