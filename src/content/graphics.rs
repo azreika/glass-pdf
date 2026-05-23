@@ -12,6 +12,8 @@ pub struct GraphicsState {
 
     pub path: Vec<PathOp>,
     pub clips: Vec<(ClippingRule, Vec<PathOp>)>,
+
+    pub alpha_source: bool,
 }
 
 impl GraphicsState {
@@ -27,6 +29,8 @@ impl GraphicsState {
 
             path: vec![],
             clips: vec![],
+
+            alpha_source: false,
         };
     }
 

@@ -28,6 +28,8 @@ pub struct XObject {
     pub width: u32,
     pub height: u32,
     pub bytes: Vec<u8>,
+    pub cs: String,
+    pub mask: Option<Box<XObject>>,
 }
 
 
@@ -60,6 +62,7 @@ impl ColourSpaceLib {
     pub fn new() -> Self {
         let mut id_to_cs = HashMap::new();
         id_to_cs.insert("DeviceGray".to_string(), ColourSpace { num_components: 1 });
+        id_to_cs.insert("DeviceRGB".to_string(), ColourSpace { num_components: 3 });
         return ColourSpaceLib { id_to_cs };
     }
 
@@ -97,6 +100,28 @@ pub enum Value {
 }
 
 impl Value {
+    pub fn to_xobj(&self) -> XObject {
+        let metadata = self.metadata();
+        let width = metadata.get("Width").unwrap().to_num() as u32;
+        let height = metadata.get("Height").unwrap().to_num() as u32;
+        let cs = metadata.get("ColorSpace").unwrap().get_string();
+
+        let filter_type = metadata.get("Filter").unwrap().get_string();
+        assert_eq!(filter_type, "FlateDecode");
+
+        let subtype = metadata.get("Subtype").unwrap().get_string();
+        assert_eq!(subtype, "Image");
+
+        let bytes = self.decode();
+        return XObject {
+            width,
+            height,
+            bytes,
+            cs,
+            mask: None,
+        };
+    }
+
     pub fn is_obj_ref(v: &Value) -> bool {
         return match v {
             Value::Reference{id:_,gxn:_} => true,
@@ -327,23 +352,13 @@ impl Pdf {
             let metadata = v.metadata();
             println!("XOBJ: {id} {:?}", metadata);
 
-            let subtype = metadata.get("Subtype").unwrap().get_string();
-            assert_eq!(subtype, "Image");
+            let mut xobj = v.to_xobj();
+            assert_eq!(xobj.cs, "DeviceRGB");
 
-            let filter_type = metadata.get("Filter").unwrap().get_string();
-            assert_eq!(filter_type, "FlateDecode");
+            let smask = metadata.get("SMask").unwrap().deref(&self).to_xobj();
+            assert_eq!(smask.cs, "DeviceGray");
+            xobj.mask = Some(Box::new(smask));
 
-            let width = metadata.get("Width").unwrap().to_num() as u32;
-            let height = metadata.get("Height").unwrap().to_num() as u32;
-
-            let cs = metadata.get("ColorSpace").unwrap().get_string();
-            assert_eq!(cs, "DeviceRGB");
-
-            let xobj = XObject {
-                width,
-                height,
-                bytes: v.decode(),
-            };
             lib.insert(id.to_string(), xobj);
         }
 

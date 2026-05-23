@@ -151,8 +151,11 @@ impl ContentTokenizer {
             let mm = self.lex_u8();
             match mm as char {
                 '\\' => {
-                    // consume \(, \), \\, \n, etc.
-                    bytes.push(mm);
+                    // consume \\, \n, etc.
+                    if !self.peek_is('(') && !self.peek_is(')') {
+                        // We don't want to escape '(' and ')'
+                        bytes.push(mm);
+                    }
                     assert!(self.has_next());
                     bytes.push(self.lex_u8());
                 },
