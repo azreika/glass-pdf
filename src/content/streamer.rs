@@ -13,6 +13,7 @@ struct TextState {
     matrix: Matrix,
     font: Option<String>,
     size: Option<f64>,
+    spacing: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -30,6 +31,7 @@ impl TextState {
             matrix: Matrix::new(),
             font: None,
             size: None,
+            spacing: 0.0,
         };
     }
 }
@@ -380,8 +382,8 @@ impl ContentStreamer {
                 println!("implement line join");
             },
             Token::CharSpacing => {
-                let _spacing = self.pop_number();
-                println!("implement char spacing");
+                let spacing = self.pop_number();
+                self.text_state.spacing = spacing;
             },
             other => panic!("unexpected token: {:?}", other),
         };
@@ -463,7 +465,9 @@ impl ContentStreamer {
             let screen_y = effective.y();
             let size = self.curr_size() * effective.y_scale().abs();
 
-            let cwidth = (self.get_font().char_width(byte) * self.text_state.matrix.x_scale() * self.curr_size())/1000.0;
+            let cwidth =
+                (self.get_font().char_width(byte) * self.text_state.matrix.x_scale() * self.curr_size())/1000.0
+                + self.text_state.spacing * self.text_state.matrix.x_scale();
 
             messages.push(Message::DrawGlyph(GlyphInfo{
                 x: screen_x,
