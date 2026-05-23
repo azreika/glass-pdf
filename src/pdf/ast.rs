@@ -57,6 +57,16 @@ pub struct ColourSpaceLib {
 }
 
 impl ColourSpaceLib {
+    pub fn new() -> Self {
+        let mut id_to_cs = HashMap::new();
+        id_to_cs.insert("DeviceGray".to_string(), ColourSpace { num_components: 1 });
+        return ColourSpaceLib { id_to_cs };
+    }
+
+    fn add_cs(&mut self, id: String, cs: ColourSpace) {
+        self.id_to_cs.insert(id, cs);
+    }
+
     pub fn num_components(&self, cs: String) -> u8 {
         return self.id_to_cs.get(&cs).unwrap().num_components;
     }
@@ -238,7 +248,7 @@ impl Pdf {
     }
 
     pub fn process_colour_spaces(&self, cs: &Value) -> ColourSpaceLib {
-        let mut id_to_cs = HashMap::new();
+        let mut cs_lib = ColourSpaceLib::new();
         for (id, val) in cs.get_dict() {
             let obj = val.deref(&self);
             assert!(matches!(obj, Value::Vector(_)));
@@ -255,9 +265,9 @@ impl Pdf {
             let cs = ColourSpace {
                 num_components: n,
             };
-            id_to_cs.insert(id.to_string(), cs);
+            cs_lib.add_cs(id.to_string(), cs);
         }
-        return ColourSpaceLib { id_to_cs };
+        return cs_lib;
     }
 
     pub fn process_fonts(&self, fonts: &Value) -> FontLib {

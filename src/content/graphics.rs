@@ -1,11 +1,14 @@
-use crate::{transform::Matrix, viewer_message::{Color, PathInfo}};
+use crate::{transform::Matrix, viewer_message::{Color, PaintType, PathInfo}};
 
 #[derive(Clone,Debug)]
 pub struct GraphicsState {
     pub ctm: Matrix,
 
-    pub cs_nostroke: Option<String>,
+    pub cs_fill: Option<String>,
     pub color_fill: Color,
+
+    pub cs_stroke: Option<String>,
+    pub color_stroke: Color,
 
     pub path: Vec<PathOp>,
     pub clips: Vec<(ClippingRule, Vec<PathOp>)>,
@@ -15,8 +18,13 @@ impl GraphicsState {
     pub fn new() -> Self {
         return GraphicsState {
             ctm: Matrix::new(),
-            cs_nostroke: None,
+
+            cs_fill: None,
             color_fill: Color::Default,
+
+            cs_stroke: None,
+            color_stroke: Color::Default,
+
             path: vec![],
             clips: vec![],
         };
@@ -38,6 +46,10 @@ impl GraphicsState {
         self.color_fill = color;
     }
 
+    pub fn set_color_stroke(&mut self, color: Color) {
+        self.color_stroke = color;
+    }
+
     pub fn draw(&mut self, op: PathOp) {
         self.path.push(op);
     }
@@ -50,12 +62,25 @@ impl GraphicsState {
         self.path.clear();
     }
 
-    pub fn finish_path(&mut self, rule: ClippingRule) -> PathInfo {
+    // TODO: better names!!
+    pub fn path_stroke_info(&self) -> PathInfo {
+        let info = PathInfo {
+            path: self.path.clone(),
+            colour: self.color_stroke.clone(),
+            rule: ClippingRule::Winding, // TODO: not relevant?
+            clips: self.clips.clone(),
+            paint_type: PaintType::Stroke,
+        };
+        return info;
+    }
+
+    pub fn finish_path_fill(&mut self, rule: ClippingRule) -> PathInfo {
         let info = PathInfo {
             path: self.path.clone(),
             colour: self.color_fill.clone(),
             rule: rule,
             clips: self.clips.clone(),
+            paint_type: PaintType::Fill,
         };
         self.clear_path();
         return info;

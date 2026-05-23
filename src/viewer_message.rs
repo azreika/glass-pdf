@@ -6,6 +6,7 @@ pub enum Message {
     DrawGlyph(GlyphInfo),
     DrawPath(PathInfo),
     DrawXObject(XObjectInfo),
+    StrokePath(PathInfo),
     Noop,
 }
 
@@ -23,7 +24,8 @@ pub struct GlyphInfo {
     pub size: f64,
     pub font_id: String,
     pub width: f64,
-    pub colour: Color,
+    pub color_fill: Color,
+    pub color_stroke: Color,
     pub clips: Vec<(ClippingRule,Vec<PathOp>)>,
 }
 
@@ -33,6 +35,13 @@ pub struct PathInfo {
     pub colour: Color,
     pub rule: ClippingRule,
     pub clips: Vec<(ClippingRule,Vec<PathOp>)>,
+    pub paint_type: PaintType,
+}
+
+#[derive(Clone, Debug)]
+pub enum PaintType {
+    Fill,
+    Stroke,
 }
 
 #[derive(Clone, Debug)]

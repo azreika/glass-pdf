@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use softbuffer::{Context, Surface};
-use tiny_skia::{FillRule, Mask, Pixmap, PixmapPaint, PremultipliedColorU8, Transform};
+use tiny_skia::{FillRule, Mask, Pixmap, PixmapPaint, PremultipliedColorU8, Stroke, Transform};
 use tiny_skia::{Color as SkiaColor, Rect as SkiaRect, Path as SkiaPath};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
@@ -17,7 +17,7 @@ use crate::content::tokenizer::Token;
 use crate::fonts::{Font, FontLib};
 use crate::pdf::ast::{ColourSpace, ColourSpaceLib, XObjectLib};
 use crate::view_info::ViewInfo;
-use crate::viewer_message::{Color, GlyphInfo, Message, PathInfo, XObjectInfo};
+use crate::viewer_message::{Color, GlyphInfo, Message, PaintType, PathInfo, XObjectInfo};
 
 
 #[derive(Clone, Debug)]
@@ -133,6 +133,7 @@ fn process_messages(messages: Vec<Message>) -> ObjectInfo {
         match msg {
             Message::DrawGlyph(info) => glyphs.push(info),
             Message::DrawPath(info) => shapes.push(info),
+            Message::StrokePath(info) => shapes.push(info),
             Message::DrawXObject(info) => xobjs.push(info),
             Message::DrawBlock(_) => panic!("unexpected draw block in messages"),
             Message::Noop => panic!("unexpected noop in messages"),
@@ -284,8 +285,10 @@ impl App {
 
     fn fill_path(&self, pixmap: &mut Pixmap, path: &Vec<PathOp>, colour: SkiaColor, rule: ClippingRule, mask: Option<&Mask>) {
         let path = self.to_skia_path(path).unwrap();
+
         let mut paint = tiny_skia::Paint::default();
         paint.set_color(colour);
+
         let transform = self.sf_transform();
         pixmap.fill_path(&path, &paint, FillRule::from(&rule), transform, mask);
     }
@@ -299,7 +302,22 @@ impl App {
         for info in &self.objects.shapes {
             let mask = self.mk_mask(&info.clips);
             let col = SkiaColor::from(&info.colour);
-            self.fill_path(pixmap, &info.path, col, info.rule, Some(&mask));
+            match info.paint_type {
+                PaintType::Fill => {
+                    self.fill_path(pixmap, &info.path, col, info.rule, Some(&mask));
+                },
+                PaintType::Stroke => {
+                    let mut paint = tiny_skia::Paint::default();
+                    paint.set_color(col);
+                    let path = self.to_skia_path(&info.path).unwrap();
+                    let transform = self.sf_transform();
+
+                    let stroke = Stroke {
+                        ..Stroke::default()
+                    };
+                    pixmap.stroke_path(&path, &paint, &stroke, transform, Some(&mask));
+                },
+            }
         }
     }
 
@@ -467,7 +485,7 @@ fn rasterize_glyphs(
             continue;
         }
 
-        let rgba = alpha_bitmap_to_rgba(&bitmap, info.colour.to_rgb8());
+        let rgba = alpha_bitmap_to_rgba(&bitmap, info.color_fill.to_rgb8());
 
         let gap = (info.width - metrics.width as f64 / scale_factor) / 2.0;
         let x = info.x + gap;

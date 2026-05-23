@@ -132,7 +132,7 @@ impl ContentStreamer {
     }
 
     fn num_colour_components(&self) -> u8 {
-        let cs = self.graphics.cs_nostroke.as_ref().unwrap();
+        let cs = self.graphics.cs_fill.as_ref().unwrap();
         return self.ctx.cs_lib.num_components(cs.to_string());
     }
 
@@ -161,13 +161,18 @@ impl ContentStreamer {
             // Paths
             Token::Fill => {
                 return Message::DrawPath(
-                    self.graphics.finish_path(ClippingRule::Winding),
+                    self.graphics.finish_path_fill(ClippingRule::Winding),
                 );
             },
             Token::FillStar => {
                 return Message::DrawPath(
-                    self.graphics.finish_path(ClippingRule::EvenOdd),
+                    self.graphics.finish_path_fill(ClippingRule::EvenOdd),
                 );
+            },
+            Token::Stroke => {
+                return Message::StrokePath(
+                    self.graphics.path_stroke_info(),
+                )
             },
             Token::Do => {
                 // Paint the specified XObject
@@ -270,7 +275,7 @@ impl ContentStreamer {
 
             Token::CsNoStroke => {
                 let cs = self.pop_string();
-                self.graphics.cs_nostroke = Some(cs);
+                self.graphics.cs_fill = Some(cs);
             },
             Token::SetColourNoStroke => {
                 let num_components = self.num_colour_components();
@@ -334,8 +339,9 @@ impl ContentStreamer {
             },
             Token::GStroke => {
                 // Sets in device gray so 0->1, 1 is white
-                let _val = self.pop_number();
-                println!("implement g stroke!");
+                let val = self.pop_number();
+                self.graphics.cs_stroke = Some("DeviceGray".to_string());
+                self.graphics.set_color_stroke(Color::Gray(val as f32));
             },
             Token::RGNonStroke => {
                 let b = self.pop_number() as f32;
@@ -360,9 +366,6 @@ impl ContentStreamer {
             Token::LineJoin => {
                 let _join = self.pop_number();
                 println!("implement line join");
-            },
-            Token::Stroke => {
-                println!("implement stroke");
             },
             Token::CharSpacing => {
                 let _spacing = self.pop_number();
@@ -457,7 +460,8 @@ impl ContentStreamer {
                 size: size,
                 font_id: self.get_font_id(),
                 width: cwidth,
-                colour: self.graphics.color_fill.clone(),
+                color_fill: self.graphics.color_fill.clone(),
+                color_stroke: self.graphics.color_stroke.clone(),
                 clips: self.graphics.clips.clone(),
             }));
 
@@ -597,7 +601,7 @@ fn simple_colour() {
 
     let (messages, streamer) = collect_messages(ctx, toks);
     assert_eq!(messages.len(), 0);
-    assert_eq!(streamer.graphics.cs_nostroke, Some("Cs1".to_string()));
+    assert_eq!(streamer.graphics.cs_fill, Some("Cs1".to_string()));
     assert_eq!(streamer.graphics.color_fill, Color::Gray(0.2));
 }
 
