@@ -258,8 +258,17 @@ impl ContentStreamer {
                 self.text_state.size = Some(size);
             },
             Token::GS => {
-                let _cs = self.pop_string();
-                println!("TODO: implement gs keyword");
+                let gstate_id = self.pop_string();
+                let gstate = self.ctx.gstate_lib.id_to_state.get(&gstate_id).unwrap();
+                if let Some(stroke_ca) = gstate.stroke_ca {
+                    self.graphics.stroke_ca = stroke_ca;
+                }
+                if let Some(blend_mode) = gstate.blend_mode {
+                    self.graphics.blend_mode = blend_mode;
+                }
+                if let Some(fill_ca) = gstate.fill_ca {
+                    self.graphics.fill_ca = fill_ca;
+                }
             },
 
             Token::BT => self.scopes.push(Scope::Text),
@@ -364,10 +373,10 @@ impl ContentStreamer {
                 self.graphics.set_color_fill(Color::RGB(r, g, b));
             },
             Token::RGStroke => {
-                let _n1 = self.pop_number();
-                let _n2 = self.pop_number();
-                let _n3 = self.pop_number();
-                println!("implement rg non stroke");
+                let b = self.pop_number() as f32;
+                let g = self.pop_number() as f32;
+                let r = self.pop_number() as f32;
+                self.graphics.color_stroke = Color::RGB(r, g, b);
             },
             Token::WLineWidth => {
                 let _width = self.pop_number();
@@ -535,7 +544,7 @@ use std::fs;
 
 use crate::content::tokenizer::tokenize_stream;
 use crate::fonts::FontLib;
-use crate::pdf::ast::{ColourSpace, ColourSpaceLib, XObjectLib};
+use crate::pdf::ast::{ColourSpace, ColourSpaceLib, GStateLib, XObjectLib};
 use crate::pdf::parser::parse_tokens;
 use crate::pdf::tokenizer::tokenize_pdf;
 
@@ -569,6 +578,7 @@ fn dummy_ctx() -> PageCtx {
             id_to_cs: HashMap::new(),
         },
         xobj_lib: XObjectLib::new(),
+        gstate_lib: GStateLib::new(),
     };
 }
 

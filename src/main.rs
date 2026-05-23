@@ -19,7 +19,7 @@ use std::env;
 
 use crate::content::pretty::PrettyPrinter;
 use crate::fonts::FontLib;
-use crate::pdf::ast::{ColourSpaceLib, Pdf, Value, XObjectLib};
+use crate::pdf::ast::{ColourSpaceLib, GStateLib, Pdf, Value, XObjectLib};
 use crate::pdf::parse_pdf;
 use crate::viewer::PageCtx;
 
@@ -104,6 +104,7 @@ fn view_content_stream(filename: String) {
         font_lib: FontLib { id_to_font: HashMap::new() },
         cs_lib: ColourSpaceLib { id_to_cs: HashMap::new() },
         xobj_lib: XObjectLib::new(),
+        gstate_lib: GStateLib::new(),
     };
     let tokenized_contents = tokenize_stream(content_bytes);
     view_contents(&ctx, &tokenized_contents);

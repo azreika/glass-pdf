@@ -1,4 +1,4 @@
-use crate::{transform::Matrix, viewer_message::{Color, PaintType, PathInfo}};
+use crate::{pdf::ast::BlendMode, transform::Matrix, viewer_message::{Color, PaintType, PathInfo}};
 
 #[derive(Clone,Debug)]
 pub struct GraphicsState {
@@ -13,6 +13,9 @@ pub struct GraphicsState {
     pub path: Vec<PathOp>,
     pub clips: Vec<(ClippingRule, Vec<PathOp>)>,
 
+    pub stroke_ca: f32,
+    pub fill_ca: f32,
+    pub blend_mode: BlendMode,
     pub alpha_source: bool,
 }
 
@@ -31,6 +34,10 @@ impl GraphicsState {
             clips: vec![],
 
             alpha_source: false,
+
+            stroke_ca: 0.0,
+            fill_ca: 0.0,
+            blend_mode: BlendMode::Normal,
         };
     }
 

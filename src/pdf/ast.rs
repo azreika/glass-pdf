@@ -54,6 +54,54 @@ pub struct ColourSpace {
 }
 
 #[derive(Debug,Clone)]
+pub struct GStateLib {
+    pub id_to_state: HashMap<String,GState>,
+}
+
+impl GStateLib {
+    pub fn new() -> Self {
+        return GStateLib {
+            id_to_state: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug,Clone,Copy)]
+pub enum BlendMode {
+    Normal,
+}
+
+#[derive(Debug,Clone)]
+pub struct GState {
+    pub stroke_ca: Option<f32>,
+    pub fill_ca: Option<f32>,
+    pub blend_mode: Option<BlendMode>,
+}
+
+impl GState {
+    pub fn new() -> Self {
+        return GState {
+            stroke_ca: None,
+            fill_ca: None,
+            blend_mode: None,
+        };
+    }
+
+    pub fn set(&mut self, k: &str, v: &Value) {
+        match k {
+            "Type" => assert_eq!(v.get_string(), "ExtGState"),
+            "CA" => self.stroke_ca = Some(v.to_num()),
+            "ca" => self.fill_ca = Some(v.to_num()),
+            "BM" => {
+                assert_eq!(v.get_string(), "Normal");
+                self.blend_mode = Some(BlendMode::Normal);
+            }
+            _ => panic!("unhandled key: {} => {}", k, v),
+        };
+    }
+}
+
+#[derive(Debug,Clone)]
 pub struct ColourSpaceLib {
     pub id_to_cs: HashMap<String,ColourSpace>,
 }
@@ -372,6 +420,21 @@ impl Pdf {
             _ => resource_ref,
         };
 
+        let mut gstate_lib = GStateLib::new();
+
+        let maybe_gstate = resources.try_get("ExtGState");
+
+        if let Some(gstate) = maybe_gstate {
+            for (name, obj) in gstate.get_dict() {
+                let info = obj.deref(&self).get_dict();
+                let mut glib = GState::new();
+                for (k, v) in info {
+                    glib.set(k, v);
+                }
+                gstate_lib.id_to_state.insert(name.to_string(), glib);
+            }
+        }
+
         let fonts = resources.get("Font");
         let font_lib = self.process_fonts(fonts);
 
@@ -402,6 +465,7 @@ impl Pdf {
             font_lib: font_lib,
             cs_lib: cs_lib,
             xobj_lib: xobj_lib,
+            gstate_lib: gstate_lib,
         };
     }
 }

@@ -15,7 +15,7 @@ use crate::content::graphics::{ClippingRule, PathOp};
 use crate::content::streamer::ContentStreamer;
 use crate::content::tokenizer::Token;
 use crate::fonts::{Font, FontLib};
-use crate::pdf::ast::{ColourSpace, ColourSpaceLib, XObjectLib};
+use crate::pdf::ast::{ColourSpace, ColourSpaceLib, GStateLib, XObjectLib};
 use crate::view_info::ViewInfo;
 use crate::viewer_message::{Color, GlyphInfo, Message, PaintType, PathInfo, XObjectInfo};
 
@@ -27,6 +27,7 @@ pub struct PageCtx {
     pub font_lib: FontLib,
     pub cs_lib: ColourSpaceLib,
     pub xobj_lib: XObjectLib,
+    pub gstate_lib: GStateLib,
 }
 
 impl PageCtx {
