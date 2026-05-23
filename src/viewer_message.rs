@@ -1,4 +1,4 @@
-use crate::{content::graphics::{ClippingRule, PathOp}, pdf::ast::XObject};
+use crate::content::graphics::{ClippingRule, PathOp};
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -53,6 +53,7 @@ pub struct XObjectInfo {
     pub h: u32,
     pub x_scale: f64,
     pub y_scale: f64,
+    pub smask: Option<Box<XObjectInfo>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -95,6 +95,9 @@ struct App {
 fn pixmap_color(src: &[u8]) -> PremultipliedColorU8 {
     let alpha = if src.len() == 4 {
         src[3]
+    } else if src.len() == 1 {
+        let g = (src[0] as f32) as u8;
+        return PremultipliedColorU8::from_rgba(g,g,g,255).unwrap();
     } else {
         assert_eq!(src.len(), 3);
         255u8
@@ -349,11 +352,28 @@ impl App {
                 x as f32,
                 y as f32);
 
+            let smask = &info.smask.clone().unwrap();
             let view_box = ViewBox::new(0.0, 0.0, info.w, info.h);
+
+            let mut xobj_pixmap = Pixmap::new(self.phys_w(), self.phys_h()).unwrap();
+
+            let mut mask_pixmap = Pixmap::new(self.phys_w(), self.phys_h()).unwrap();
+            draw_pixels(&mut mask_pixmap, view_box, &smask.bytes, 1, transform);
+
+            let mask = Mask::from_pixmap(mask_pixmap.as_ref(), tiny_skia::MaskType::Luminance);
             draw_pixels(
-                pixmap, view_box,
+                &mut xobj_pixmap, view_box,
                 &info.bytes, 3,
                 transform,
+            );
+
+            xobj_pixmap.apply_mask(&mask);
+            pixmap.draw_pixmap(
+                0, 0,
+                xobj_pixmap.as_ref(),
+                &PixmapPaint::default(),
+                Transform::identity(),
+                None,
             );
         }
     }

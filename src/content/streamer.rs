@@ -183,6 +183,8 @@ impl ContentStreamer {
                 let screen_x = ctm.x();
                 let screen_y = ctm.y();
 
+                let mask = xobj.mask.clone().unwrap();
+
                 return Message::DrawXObject(
                     XObjectInfo {
                         bytes: xobj.bytes.clone(),
@@ -192,6 +194,16 @@ impl ContentStreamer {
                         y_scale: ctm.y_scale(),
                         x: screen_x,
                         y: screen_y,
+                        smask: Some(Box::new(XObjectInfo {
+                            bytes: mask.bytes.clone(),
+                            w: mask.width,
+                            h: mask.height,
+                            x_scale: ctm.x_scale(),
+                            y_scale: ctm.y_scale(),
+                            x: screen_x,
+                            y: screen_y,
+                            smask: None,
+                        })),
                     }
                 );
             },
